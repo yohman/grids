@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Map Grid Printer (Leaflet)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- leaflet-image for exporting map to canvas -->
+  <script src="https://unpkg.com/leaflet-image/leaflet-image.js"></script>
+
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      color: #222;
+    }
+    body {
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Side panel */
+    #sidebar {
+      width: 340px;
+      min-width: 320px;
+      max-width: 380px;
+      padding: 16px 16px 24px;
+      border-right: 1px solid #ddd;
+      background: #f9fafb;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    #sidebar h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    #sidebar h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+    #sidebar p.desc {
+      font-size: 0.8rem;
+      color: #555;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .section {
+      padding: 10px 12px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
+    }
+    .field-group {
+      display: grid;
+      grid-template-columns: 1.3fr 1.1fr;
+      gap: 6px 8px;
+      align-items: center;
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+    .field-group label {
+      color: #374151;
+    }
+    .field-group input,
+    .field-group select {
+      width: 100%;
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      font-size: 0.85rem;
+    }
+    .inline-fields {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .inline-fields > div {
+      flex: 1;
+    }
+    .inline-fields label {
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 2px;
+      color: #374151;
+    }
+    .inline-fields input {
+      width: 100%;
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      font-size: 0.85rem;
+    }
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    button {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #0f766e;
+      background: #0d9488;
+      color: #ffffff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.12s ease, transform 0.05s ease;
+    }
+    button.secondary {
+      border-color: #4b5563;
+      background: #ffffff;
+      color: #111827;
+    }
+    button:disabled {
+      background: #9ca3af;
+      border-color: #9ca3af;
+      cursor: default;
+    }
+    button:hover:not(:disabled) {
+      background: #0f766e;
+      transform: translateY(-0.5px);
+    }
+    button.secondary:hover:not(:disabled) {
+      background: #f3f4f6;
+    }
+    button.paper-active {
+      background: #0f766e;
+      color: #f9fafb;
+      border-color: #0f766e;
+    }
+    button.paper-active.secondary:hover:not(:disabled) {
+      background: #0f766e;
+    }
+    .status {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: #4b5563;
+      min-height: 1.2em;
+    }
+    .small-note {
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    #exportOverlay {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.85);
+      color: #f9fafb;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
+    }
+
+    #map {
+      flex: 1;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div class="section">
+      <h1>Map Grid Printer</h1>
+      <p class="desc">
+        Create a grid on the map and export each cell as a PDF.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>Search</h2>
+      <div class="inline-fields">
+        <div style="flex: 1.7;">
+          <label for="searchInput">Search</label>
+          <input id="searchInput" type="text" placeholder="Place or address" />
+        </div>
+        <div style="flex: 0.9; display: flex; align-items: flex-end;">
+          <button id="searchBtn" style="width: 100%;">Search</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Grid settings</h2>
+      <div class="field-group">
+        <label for="rows">Rows</label>
+        <input id="rows" type="number" min="1" value="5" />
+
+        <label for="cols">Columns</label>
+        <input id="cols" type="number" min="1" value="5" />
+
+        <label for="zoomLevel">Zoom</label>
+        <input id="zoomLevel" type="number" step="1" min="1" max="22" value="11" />
+      </div>
+      <p class="small-note">
+        Grid uses the current map view. Rows × cols set cells.
+      </p>
+      <p class="small-note">
+        Paper preset:
+      </p>
+      <div class="button-row">
+        <button type="button" class="secondary paper-btn" data-paper="A3">
+          A3 (default)
+        </button>
+        <button type="button" class="secondary paper-btn" data-paper="A4">
+          A4
+        </button>
+        <button type="button" class="secondary paper-btn" data-paper="custom">
+          Custom
+        </button>
+      </div>
+      <div class="button-row">
+        <button id="generateGridBtn">Generate / Update Grid</button>
+      </div>
+      <p class="small-note" id="gridDims"></p>
+    </div>
+
+    <div class="section">
+      <h2>Basemap</h2>
+      <div class="field-group">
+        <label for="basemapSelect">Tile source</label>
+        <select id="basemapSelect">
+          <option value="esri">ESRI World Imagery</option>
+          <option value="gsi1974">GSI 1974</option>
+          <option value="gsiPresent">GSI Present</option>
+          <option value="gsi1961">GSI 1961</option>
+          <option value="gsi1984">GSI 1984</option>
+          <option value="googleSat">Google Satellite</option>
+          <option value="googleHybrid">Google Hybrid</option>
+          <option value="googleMaps">Google Maps</option>
+        </select>
+
+        <label for="pixelRatioSelect">Retina / pixel ratio hint</label>
+        <select id="pixelRatioSelect">
+          <option value="1">1 (normal)</option>
+          <option value="2" selected>2 (high)</option>
+        </select>
+      </div>
+      <p class="small-note">
+        Change basemap and retina tile hint.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>Export</h2>
+      <p class="desc">
+        Export all cells to a PDF or save the current view as PNG.
+      </p>
+      <div class="button-row">
+        <button id="exportBtn">Export all cells</button>
+        <button class="secondary" id="exportOneBtn">
+          Export current view (PNG)
+        </button>
+      </div>
+      <div class="status" id="statusText"></div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+    // ========= Constants and helpers =========
+    const R = 6378137; // WebMercator radius
+    let map;
+    let gridCells = []; // [{row, col, bbox: [[minLng, minLat], [maxLng, maxLat]]}]
+    let gridLayer = null;
+    let currentPixelRatio = 2;
+    let baseLayers = {};
+    let currentBaseLayer = null;
+    let paperMode = "A3"; // "A3" | "A4" | "custom"
+
+    // Grid dragging state
+    let isDraggingGrid = false;
+    let dragStartMeters = null;
+    let dragStartCells = null;
+
+    function lngLatToMeters(lng, lat) {
+      const x = (lng * Math.PI * R) / 180;
+      const y = R * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+      return { x, y };
+    }
+
+    function metersToLngLat(x, y) {
+      const lng = (x / R) * (180 / Math.PI);
+      const lat =
+        (180 / Math.PI) *
+        (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2);
+      return { lng, lat };
+    }
+
+    function setStatus(msg) {
+      document.getElementById("statusText").textContent = msg || "";
+    }
+
+    function setGridDimensionsText(msg) {
+      const el = document.getElementById("gridDims");
+      if (!el) return;
+      el.textContent = msg || "";
+    }
+
+    function setExportOverlay(text) {
+      const el = document.getElementById("exportOverlay");
+      if (!el) return;
+      if (text && text.length) {
+        el.textContent = text;
+        el.style.display = "inline-flex";
+      } else {
+        el.style.display = "none";
+      }
+    }
+
+    // ========= Grid drag handlers =========
+    function onGridMouseDown(e) {
+      if (!map || !gridCells.length) return;
+      const latlng = e.latlng;
+      dragStartMeters = lngLatToMeters(latlng.lng, latlng.lat);
+      // Deep copy of current gridCells
+      dragStartCells = gridCells.map((cell) => ({
+        row: cell.row,
+        col: cell.col,
+        bbox: [
+          [cell.bbox[0][0], cell.bbox[0][1]],
+          [cell.bbox[1][0], cell.bbox[1][1]]
+        ]
+      }));
+      isDraggingGrid = true;
+      if (map.dragging && map.dragging.enabled()) {
+        map.dragging.disable();
+      }
+      if (e.originalEvent) {
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+      }
+    }
+
+    function onGridDragMove(e) {
+      if (!isDraggingGrid || !map || !dragStartMeters || !dragStartCells) return;
+      const latlng = e.latlng;
+      const currentMeters = lngLatToMeters(latlng.lng, latlng.lat);
+      const dx = currentMeters.x - dragStartMeters.x;
+      const dy = currentMeters.y - dragStartMeters.y;
+
+      const newCells = dragStartCells.map((cell) => {
+        const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
+        const minM = lngLatToMeters(minLng, minLat);
+        const maxM = lngLatToMeters(maxLng, maxLat);
+        const shiftedMin = metersToLngLat(minM.x + dx, minM.y + dy);
+        const shiftedMax = metersToLngLat(maxM.x + dx, maxM.y + dy);
+        return {
+          row: cell.row,
+          col: cell.col,
+          bbox: [
+            [shiftedMin.lng, shiftedMin.lat],
+            [shiftedMax.lng, shiftedMax.lat]
+          ]
+        };
+      });
+
+      gridCells = newCells;
+      const gridGeoJSON = buildGridGeoJSON(gridCells);
+      ensureGridSourceAndLayer(gridGeoJSON);
+    }
+
+    function onGridDragEnd() {
+      if (!isDraggingGrid) return;
+      isDraggingGrid = false;
+      dragStartMeters = null;
+      dragStartCells = null;
+      if (map && map.dragging && !map.dragging.enabled()) {
+        map.dragging.enable();
+      }
+    }
+
+    // ========= Map initialization (Leaflet) =========
+    function createMap(pixelRatio) {
+      currentPixelRatio = pixelRatio;
+
+      if (map) {
+        map.remove();
+        map = null;
+      }
+
+      // Takashima area; Leaflet expects [lat, lng]
+      const initialCenter = [35.35, 136.03];
+
+      map = L.map("map", {
+        center: initialCenter,
+        zoom: 11,
+        zoomSnap: 1,   // integer zooms only
+        zoomDelta: 1
+      });
+
+      // Basemap layers
+      baseLayers = {
+        esri: L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          {
+            tileSize: 256,
+            attribution:
+              "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+            detectRetina: pixelRatio > 1
+          }
+        ),
+        gsi1974: L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg",
+          {
+            tileSize: 256,
+            attribution: "&copy; GSI Japan 1974",
+            detectRetina: pixelRatio > 1
+          }
+        ),
+        gsiPresent: L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+          {
+            tileSize: 256,
+            attribution: "&copy; GSI Japan Present",
+            detectRetina: pixelRatio > 1
+          }
+        ),
+        gsi1961: L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/ort_old10/{z}/{x}/{y}.png",
+          {
+            tileSize: 256,
+            attribution: "&copy; GSI Japan 1961",
+            detectRetina: pixelRatio > 1
+          }
+        ),
+        gsi1984: L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
+          {
+            tileSize: 256,
+            attribution: "&copy; GSI Japan 1984",
+            detectRetina: pixelRatio > 1
+          }
+        ),
+        googleSat: L.tileLayer(
+          "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+          {
+            tileSize: 256,
+            attribution: "Imagery © Google",
+            detectRetina: pixelRatio > 1
+          }
+        ),
+        googleHybrid: L.tileLayer(
+          "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+          {
+            tileSize: 256,
+            attribution: "Imagery © Google",
+            detectRetina: pixelRatio > 1
+          }
+        ),
+        googleMaps: L.tileLayer(
+          "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+          {
+            tileSize: 256,
+            attribution: "Map data © Google",
+            detectRetina: pixelRatio > 1
+          }
+        )
+      };
+
+      currentBaseLayer = baseLayers.esri;
+      currentBaseLayer.addTo(map);
+
+      // If a grid already exists, redraw it
+      if (gridCells.length > 0) {
+        const gridGeoJSON = buildGridGeoJSON(gridCells);
+        ensureGridSourceAndLayer(gridGeoJSON);
+      }
+
+      // Map-level handlers for dragging the grid
+      map.on("mousemove", onGridDragMove);
+      map.on("mouseup", onGridDragEnd);
+      map.on("mouseleave", onGridDragEnd);
+
+      // Apply current basemap selection
+      setBasemapVisibility(
+        document.getElementById("basemapSelect").value
+      );
+    }
+
+    function setBasemapVisibility(key) {
+      if (!map || !baseLayers[key]) return;
+      if (currentBaseLayer) {
+        map.removeLayer(currentBaseLayer);
+      }
+      currentBaseLayer = baseLayers[key];
+      currentBaseLayer.addTo(map);
+    }
+
+    // ========= Grid creation from visible extent =========
+    function buildGridGeoJSON(cells) {
+      return {
+        type: "FeatureCollection",
+        features: cells.map((cell) => {
+          const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
+          return {
+            type: "Feature",
+            properties: {
+              row: cell.row,
+              col: cell.col,
+              id: `r${cell.row + 1}_c${cell.col + 1}`
+            },
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [minLng, minLat],
+                  [maxLng, minLat],
+                  [maxLng, maxLat],
+                  [minLng, maxLat],
+                  [minLng, minLat]
+                ]
+              ]
+            }
+          };
+        })
+      };
+    }
+
+    function ensureGridSourceAndLayer(gridGeoJSON) {
+      if (!map) return;
+
+      if (gridLayer) {
+        gridLayer.clearLayers();
+        gridLayer.addData(gridGeoJSON);
+      } else {
+        gridLayer = L.geoJSON(gridGeoJSON, {
+          style: {
+            color: "#ea580c",
+            weight: 1.2,
+            fillColor: "#f97316",
+            fillOpacity: 0.08
+          }
+        }).addTo(map);
+      }
+
+      // Ensure the grid layer responds to mousedown for dragging
+      if (gridLayer) {
+        gridLayer.off("mousedown", onGridMouseDown);
+        gridLayer.on("mousedown", onGridMouseDown);
+      }
+    }
+
+    function generateGrid() {
+      if (!map) return;
+
+      const rows = Math.max(
+        1,
+        parseInt(document.getElementById("rows").value, 10) || 1
+      );
+      const cols = Math.max(
+        1,
+        parseInt(document.getElementById("cols").value, 10) || 1
+      );
+
+      // Apply desired zoom from the zoom box before we read the bounds
+      const zoomInput = document.getElementById("zoomLevel");
+      if (zoomInput) {
+        const desiredZoom = parseFloat(zoomInput.value);
+        if (isFinite(desiredZoom)) {
+          const center = map.getCenter();
+          map.setView(center, desiredZoom, { animate: false });
+        }
+      }
+
+      // Start from current visible map extent
+      const viewBounds = map.getBounds();
+      const viewSw = viewBounds.getSouthWest();
+      const viewNe = viewBounds.getNorthEast();
+
+      // Convert visible extent to WebMercator meters
+      const viewSwM = lngLatToMeters(viewSw.lng, viewSw.lat);
+      const viewNeM = lngLatToMeters(viewNe.lng, viewNe.lat);
+
+      const viewWidth = viewNeM.x - viewSwM.x;
+      const viewHeight = viewNeM.y - viewSwM.y;
+
+      // Default grid extent is the full view
+      let swM = { x: viewSwM.x, y: viewSwM.y };
+      let neM = { x: viewNeM.x, y: viewNeM.y };
+      let totalW = viewWidth;
+      let totalH = viewHeight;
+
+      // Center of the view in meters
+      const centerX = (viewSwM.x + viewNeM.x) / 2;
+      const centerY = (viewSwM.y + viewNeM.y) / 2;
+
+      // Adjust the grid extent to match A-series aspect ratios when requested.
+      // A-series has aspect ratio sqrt(2) between long and short side.
+      // Here:
+      //   A3  -> landscape: width / height = sqrt(2)
+      //   A4  -> portrait:  height / width = sqrt(2) => width / height = 1 / sqrt(2)
+      if (paperMode === "A3" || paperMode === "A4") {
+        const targetAR =
+          paperMode === "A3" ? Math.SQRT2 : 1 / Math.SQRT2; // width / height
+        // Fit the largest rectangle of aspect targetAR inside the current view
+        // Option 1: height-limited
+        let newH = viewHeight;
+        let newW = targetAR * newH;
+        if (newW > viewWidth) {
+          // Option 2: width-limited
+          newW = viewWidth;
+          newH = newW / targetAR;
+        }
+        totalW = newW;
+        totalH = newH;
+        const halfW = totalW / 2;
+        const halfH = totalH / 2;
+        swM = { x: centerX - halfW, y: centerY - halfH };
+        neM = { x: centerX + halfW, y: centerY + halfH };
+      }
+
+      const cellW = totalW / cols;
+      const cellH = totalH / rows;
+
+      const cells = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const minX = swM.x + c * cellW;
+          const maxX = minX + cellW;
+          const minY = swM.y + r * cellH;
+          const maxY = minY + cellH;
+
+          const swLL = metersToLngLat(minX, minY);
+          const neLL = metersToLngLat(maxX, maxY);
+
+          const bbox = [
+            [swLL.lng, swLL.lat],
+            [neLL.lng, neLL.lat]
+          ];
+
+          cells.push({
+            row: r,
+            col: c,
+            bbox
+          });
+        }
+      }
+
+      gridCells = cells;
+      const gridGeoJSON = buildGridGeoJSON(gridCells);
+      ensureGridSourceAndLayer(gridGeoJSON);
+
+      // Approximate overall grid and cell size in km for feedback
+      const gridSwLL = metersToLngLat(swM.x, swM.y);
+      const gridNeLL = metersToLngLat(neM.x, neM.y);
+      const centerLat = (gridSwLL.lat + gridNeLL.lat) / 2;
+      const metersPerDegLat = (2 * Math.PI * R) / 360;
+      const metersPerDegLng =
+        ((2 * Math.PI * R) / 360) * Math.cos((centerLat * Math.PI) / 180);
+
+      const gridWidthKmApprox =
+        ((gridNeLL.lng - gridSwLL.lng) * metersPerDegLng) / 1000;
+      const gridHeightKmApprox =
+        ((gridNeLL.lat - gridSwLL.lat) * metersPerDegLat) / 1000;
+
+      const cellWidthKmApprox = gridWidthKmApprox / cols;
+      const cellHeightKmApprox = gridHeightKmApprox / rows;
+      const cellAspect =
+        cellHeightKmApprox !== 0
+          ? cellWidthKmApprox / cellHeightKmApprox
+          : NaN;
+
+      const zoomNow = map.getZoom();
+
+      const dimsText = `Current grid: zoom ${zoomNow.toFixed(
+        0
+      )}, ≈ ${gridWidthKmApprox.toFixed(
+        3
+      )} × ${gridHeightKmApprox.toFixed(
+        3
+      )} km; cell ≈ ${cellWidthKmApprox.toFixed(
+        3
+      )} × ${cellHeightKmApprox.toFixed(
+        3
+      )} km (aspect ${
+        isFinite(cellAspect) ? cellAspect.toFixed(3) : "–"
+      }, mode ${paperMode}).`;
+
+      setGridDimensionsText(dimsText);
+
+      setStatus(
+        `Grid generated: ${rows} × ${cols}. ${dimsText}`
+      );
+
+      const zoomInputEl = document.getElementById("zoomLevel");
+      if (zoomInputEl) {
+        zoomInputEl.value = zoomNow.toFixed(0);
+      }
+    }
+
+    // ========= Search =========
+    function searchLocation() {
+      if (!map) return;
+      const q = document.getElementById("searchInput").value.trim();
+      if (!q) return;
+      setStatus('Searching for "' + q + '"...');
+      fetch(
+        "https://nominatim.openstreetmap.org/search?format=json&q=" +
+          encodeURIComponent(q)
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data || !data.length) {
+            setStatus('No results found for "' + q + '".');
+            return;
+          }
+          const best = data[0];
+          const lat = parseFloat(best.lat);
+          const lon = parseFloat(best.lon);
+          map.flyTo([lat, lon], 12);
+          setStatus("Moved to " + best.display_name);
+        })
+        .catch((err) => {
+          console.error(err);
+          setStatus("Search failed. Please try again.");
+        });
+    }
+
+    // ========= Export current view (PNG) =========
+    function exportCurrentView() {
+      if (!map) return;
+      try {
+        leafletImage(map, (err, canvas) => {
+          if (err) {
+            console.error(err);
+            setStatus("Export failed. Rendering error.");
+            return;
+          }
+          const dataURL = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          const ts = new Date().toISOString().replace(/[:.]/g, "-");
+          link.href = dataURL;
+          link.download = `map_view_${ts}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setStatus("Exported current view as PNG.");
+        });
+      } catch (e) {
+        console.error(e);
+        setStatus("Export failed. Check browser permissions.");
+      }
+    }
+
+    // ========= Export all cells to single PDF =========
+    function exportAllCells() {
+      if (!map) return;
+      if (!gridCells.length) {
+        alert("Please generate a grid first.");
+        return;
+      }
+
+      const exportBtn = document.getElementById("exportBtn");
+      const exportOneBtn = document.getElementById("exportOneBtn");
+      exportBtn.disabled = true;
+      exportOneBtn.disabled = true;
+
+      const { jsPDF } = window.jspdf;
+      let pdf = null;
+
+      let index = 0;
+      const total = gridCells.length;
+
+      setStatus(`Exporting cell 1 of ${total}...`);
+      setExportOverlay(`Exporting cell 1 of ${total}...`);
+
+      function processNext() {
+        const cell = gridCells[index];
+        const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
+
+        const bounds = L.latLngBounds(
+          L.latLng(minLat, minLng),
+          L.latLng(maxLat, maxLng)
+        );
+
+        // Fit map to cell bounds; Leaflet uses integer zooms.
+        // We do not rely on 'moveend' here; leaflet-image will wait for tiles.
+        map.fitBounds(bounds, { animate: false, padding: [0, 0] });
+
+        leafletImage(map, (err, canvas) => {
+          if (err) {
+            console.error(err);
+            afterCapture();
+            return;
+          }
+
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+          const dataURL = canvas.toDataURL("image/png");
+
+          if (!pdf) {
+            const orientation =
+              imgWidth >= imgHeight ? "landscape" : "portrait";
+            pdf = new jsPDF({
+              orientation,
+              unit: "px",
+              format: [imgWidth, imgHeight]
+            });
+          } else {
+            pdf.addPage();
+          }
+
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          pdf.addImage(dataURL, "PNG", 0, 0, pageWidth, pageHeight);
+
+          afterCapture();
+        });
+      }
+
+      function afterCapture() {
+        index++;
+        if (index >= total) {
+          pdf.save("map_grid.pdf");
+          exportBtn.disabled = false;
+          exportOneBtn.disabled = false;
+          setStatus(`Export completed: ${total} cells. PDF downloaded.`);
+          setExportOverlay("");
+          return;
+        }
+        const stepText = `Exporting cell ${index + 1} of ${total}...`;
+        setStatus(stepText);
+        setExportOverlay(stepText);
+        setTimeout(processNext, 200);
+      }
+
+      processNext();
+    }
+
+    // ========= Wiring =========
+    window.addEventListener("DOMContentLoaded", () => {
+      createMap(
+        parseInt(
+          document.getElementById("pixelRatioSelect").value,
+          10
+        ) || 2
+      );
+
+      // Initialize zoom input from map and keep it in sync on zoom
+      const zoomInputEl = document.getElementById("zoomLevel");
+      if (zoomInputEl && map) {
+        zoomInputEl.value = map.getZoom().toFixed(0);
+        map.on("zoomend", () => {
+          zoomInputEl.value = map.getZoom().toFixed(0);
+        });
+      }
+
+      document
+        .getElementById("generateGridBtn")
+        .addEventListener("click", generateGrid);
+
+      // Paper mode buttons (A3 / A4 / Custom)
+      const paperButtons = Array.from(
+        document.querySelectorAll(".paper-btn")
+      );
+      function updatePaperButtons() {
+        paperButtons.forEach((btn) => {
+          const mode = btn.getAttribute("data-paper");
+          if (mode === paperMode) {
+            btn.classList.add("paper-active");
+          } else {
+            btn.classList.remove("paper-active");
+          }
+        });
+      }
+      paperButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const mode = btn.getAttribute("data-paper");
+          if (!mode) return;
+          paperMode = mode;
+          updatePaperButtons();
+          setStatus(`Paper mode set to ${paperMode}. Regenerate the grid to apply.`);
+        });
+      });
+      // Initialize default mode (A3)
+      updatePaperButtons();
+
+      document
+        .getElementById("basemapSelect")
+        .addEventListener("change", (e) => {
+          setBasemapVisibility(e.target.value);
+        });
+
+      document
+        .getElementById("pixelRatioSelect")
+        .addEventListener("change", (e) => {
+          const pr = parseInt(e.target.value, 10) || 2;
+          setStatus(
+            "Recreating map with new retina/pixel ratio hint..."
+          );
+          createMap(pr);
+          if (gridCells.length) {
+            generateGrid();
+          }
+        });
+
+      document
+        .getElementById("exportBtn")
+        .addEventListener("click", exportAllCells);
+
+      document
+        .getElementById("exportOneBtn")
+        .addEventListener("click", exportCurrentView);
+
+      document
+        .getElementById("searchBtn")
+        .addEventListener("click", searchLocation);
+
+      document
+        .getElementById("searchInput")
+        .addEventListener("keydown", (e) => {
+          if (e.key === "Enter") searchLocation();
+        });
+    });
+  </script>
+  <div id="exportOverlay"></div>
+</body>
+</html>
