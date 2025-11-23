@@ -242,6 +242,12 @@
       <div class="button-row">
         <button id="generateGridBtn">Generate / Update Grid</button>
       </div>
+      <div class="small-note" style="margin-top: 4px;">
+        <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input id="lockGrid" type="checkbox" checked />
+          <span>Lock grid</span>
+        </label>
+      </div>
       <p class="small-note" id="gridDims"></p>
     </div>
 
@@ -276,6 +282,12 @@
       <p class="desc">
         Export all cells to a PDF or save the current view as PNG.
       </p>
+      <div class="small-note" style="margin-top: 4px;">
+        <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input id="showBoundaries" type="checkbox" checked />
+          <span>Show grid boundaries in export</span>
+        </label>
+      </div>
       <div class="button-row">
         <button id="exportBtn">Export all cells</button>
         <button class="secondary" id="exportOneBtn">
@@ -303,6 +315,7 @@
     let isDraggingGrid = false;
     let dragStartMeters = null;
     let dragStartCells = null;
+    let gridLocked = false;
 
     function lngLatToMeters(lng, lat) {
       const x = (lng * Math.PI * R) / 180;
@@ -339,9 +352,84 @@
       }
     }
 
+    function updateUrlFromState() {
+      if (!map) return;
+
+      const params = new URLSearchParams();
+      const center = map.getCenter();
+      params.set("lat", center.lat.toFixed(6));
+      params.set("lng", center.lng.toFixed(6));
+      params.set("zoom", map.getZoom().toFixed(2));
+
+      const basemapSelect = document.getElementById("basemapSelect");
+      if (basemapSelect) {
+        params.set("basemap", basemapSelect.value);
+      }
+
+      const rowsInput = document.getElementById("rows");
+      const colsInput = document.getElementById("cols");
+      if (rowsInput && colsInput && gridCells.length) {
+        params.set("rows", rowsInput.value);
+        params.set("cols", colsInput.value);
+      }
+
+      if (gridCells.length) {
+        let minLng = Infinity;
+        let minLat = Infinity;
+        let maxLng = -Infinity;
+        let maxLat = -Infinity;
+        gridCells.forEach((cell) => {
+          const [[cMinLng, cMinLat], [cMaxLng, cMaxLat]] = cell.bbox;
+          if (cMinLng < minLng) minLng = cMinLng;
+          if (cMinLat < minLat) minLat = cMinLat;
+          if (cMaxLng > maxLng) maxLng = cMaxLng;
+          if (cMaxLat > maxLat) maxLat = cMaxLat;
+        });
+        if (
+          isFinite(minLng) &&
+          isFinite(minLat) &&
+          isFinite(maxLng) &&
+          isFinite(maxLat)
+        ) {
+          params.set("gswLng", minLng.toFixed(6));
+          params.set("gswLat", minLat.toFixed(6));
+          params.set("gneLng", maxLng.toFixed(6));
+          params.set("gneLat", maxLat.toFixed(6));
+        }
+        params.set("paper", paperMode);
+      }
+
+      const showBoundariesEl = document.getElementById("showBoundaries");
+      if (showBoundariesEl) {
+        params.set("boundaries", showBoundariesEl.checked ? "1" : "0");
+      }
+
+      const lockEl = document.getElementById("lockGrid");
+      if (lockEl) {
+        params.set("lock", lockEl.checked ? "1" : "0");
+      }
+
+      const zoomLevelInput = document.getElementById("zoomLevel");
+      if (zoomLevelInput) {
+        params.set("gridZoom", zoomLevelInput.value);
+      }
+
+      const pixelRatioSel = document.getElementById("pixelRatioSelect");
+      if (pixelRatioSel) {
+        params.set("pr", pixelRatioSel.value);
+      }
+
+      const qs = params.toString();
+      const newUrl = qs
+        ? `${window.location.pathname}?${qs}`
+        : window.location.pathname;
+      window.history.replaceState(null, "", newUrl);
+    }
+
     // ========= Grid drag handlers =========
     function onGridMouseDown(e) {
       if (!map || !gridCells.length) return;
+      if (gridLocked) return;
       const latlng = e.latlng;
       dragStartMeters = lngLatToMeters(latlng.lng, latlng.lat);
       // Deep copy of current gridCells
@@ -399,6 +487,7 @@
       if (map && map.dragging && !map.dragging.enabled()) {
         map.dragging.enable();
       }
+      updateUrlFromState();
     }
 
     // ========= Map initialization (Leaflet) =========
@@ -718,6 +807,8 @@
       if (zoomInputEl) {
         zoomInputEl.value = zoomNow.toFixed(0);
       }
+
+      updateUrlFromState();
     }
 
     // ========= Search =========
@@ -751,8 +842,24 @@
     // ========= Export current view (PNG) =========
     function exportCurrentView() {
       if (!map) return;
+      const showBoundariesEl = document.getElementById("showBoundaries");
+      const showBoundaries =
+        !showBoundariesEl || showBoundariesEl.checked;
+
+      // Temporarily hide grid if boundaries are disabled for export
+      let removedGrid = false;
+      if (!showBoundaries && gridLayer && map.hasLayer(gridLayer)) {
+        map.removeLayer(gridLayer);
+        removedGrid = true;
+      }
+
       try {
         leafletImage(map, (err, canvas) => {
+          // Restore grid layer after capture
+          if (removedGrid && gridLayer && !map.hasLayer(gridLayer)) {
+            gridLayer.addTo(map);
+          }
+
           if (err) {
             console.error(err);
             setStatus("Export failed. Rendering error.");
@@ -771,6 +878,9 @@
       } catch (e) {
         console.error(e);
         setStatus("Export failed. Check browser permissions.");
+        if (removedGrid && gridLayer && !map.hasLayer(gridLayer)) {
+          gridLayer.addTo(map);
+        }
       }
     }
 
@@ -793,6 +903,17 @@
       let index = 0;
       const total = gridCells.length;
 
+      const showBoundariesEl = document.getElementById("showBoundaries");
+      const showBoundaries =
+        !showBoundariesEl || showBoundariesEl.checked;
+
+      // If boundaries should not appear in export, temporarily hide the grid layer.
+      let removedGridForExport = false;
+      if (!showBoundaries && gridLayer && map.hasLayer(gridLayer)) {
+        map.removeLayer(gridLayer);
+        removedGridForExport = true;
+      }
+
       setStatus(`Exporting cell 1 of ${total}...`);
       setExportOverlay(`Exporting cell 1 of ${total}...`);
 
@@ -806,7 +927,6 @@
         );
 
         // Fit map to cell bounds; Leaflet uses integer zooms.
-        // We do not rely on 'moveend' here; leaflet-image will wait for tiles.
         map.fitBounds(bounds, { animate: false, padding: [0, 0] });
 
         leafletImage(map, (err, canvas) => {
@@ -816,20 +936,70 @@
             return;
           }
 
-          const imgWidth = canvas.width;
-          const imgHeight = canvas.height;
-          const dataURL = canvas.toDataURL("image/png");
+          // Map size in CSS pixels and canvas size in actual pixels
+          const mapSize = map.getSize();
+          const scaleX = canvas.width / mapSize.x;
+          const scaleY = canvas.height / mapSize.y;
+
+          // Compute the pixel rectangle corresponding exactly to the cell bounds
+          const swLatLng = L.latLng(minLat, minLng);
+          const neLatLng = L.latLng(maxLat, maxLng);
+          const swPt = map.latLngToContainerPoint(swLatLng); // bottom-left
+          const nePt = map.latLngToContainerPoint(neLatLng); // top-right
+
+          // Convert to canvas pixel coordinates (unclamped)
+          let x0 = swPt.x * scaleX;
+          let y0 = nePt.y * scaleY;
+          let x1 = nePt.x * scaleX;
+          let y1 = swPt.y * scaleY;
+
+          // Clamp to canvas bounds to avoid overshoot
+          x0 = Math.max(0, Math.min(canvas.width, x0));
+          x1 = Math.max(0, Math.min(canvas.width, x1));
+          y0 = Math.max(0, Math.min(canvas.height, y0));
+          y1 = Math.max(0, Math.min(canvas.height, y1));
+
+          const sx = Math.round(Math.min(x0, x1));
+          const sy = Math.round(Math.min(y0, y1));
+          const ex = Math.round(Math.max(x0, x1));
+          const ey = Math.round(Math.max(y0, y1));
+
+          const cropW = Math.max(1, ex - sx);
+          const cropH = Math.max(1, ey - sy);
+
+          // Create a cropped canvas matching exactly the grid cell
+          const cropCanvas = document.createElement("canvas");
+          cropCanvas.width = cropW;
+          cropCanvas.height = cropH;
+          const ctx = cropCanvas.getContext("2d");
+
+          ctx.drawImage(
+            canvas,
+            sx,
+            sy,
+            cropW,
+            cropH,
+            0,
+            0,
+            cropW,
+            cropH
+          );
+
+          const dataURL = cropCanvas.toDataURL("image/png");
 
           if (!pdf) {
             const orientation =
-              imgWidth >= imgHeight ? "landscape" : "portrait";
+              cropW >= cropH ? "landscape" : "portrait";
             pdf = new jsPDF({
               orientation,
               unit: "px",
-              format: [imgWidth, imgHeight]
+              format: [cropW, cropH]
             });
           } else {
-            pdf.addPage();
+            pdf.addPage(
+              [cropW, cropH],
+              cropW >= cropH ? "landscape" : "portrait"
+            );
           }
 
           const pageWidth = pdf.internal.pageSize.getWidth();
@@ -848,6 +1018,11 @@
           exportOneBtn.disabled = false;
           setStatus(`Export completed: ${total} cells. PDF downloaded.`);
           setExportOverlay("");
+
+          // Restore grid layer if we hid it for export
+          if (removedGridForExport && gridLayer && !map.hasLayer(gridLayer)) {
+            gridLayer.addTo(map);
+          }
           return;
         }
         const stepText = `Exporting cell ${index + 1} of ${total}...`;
@@ -859,24 +1034,214 @@
       processNext();
     }
 
-    // ========= Wiring =========
+    // ========= Wiring & URL restoration =========
     window.addEventListener("DOMContentLoaded", () => {
-      createMap(
-        parseInt(
-          document.getElementById("pixelRatioSelect").value,
-          10
-        ) || 2
-      );
+      const params = new URLSearchParams(window.location.search);
 
-      // Initialize zoom input from map and keep it in sync on zoom
+      const pixelRatioSelect = document.getElementById("pixelRatioSelect");
+      let pr = parseInt(pixelRatioSelect.value, 10) || 2;
+      if (params.has("pr")) {
+        const prParam = parseInt(params.get("pr"), 10);
+        if (!isNaN(prParam)) {
+          pr = prParam;
+          pixelRatioSelect.value = String(prParam);
+        }
+      }
+
+      createMap(pr);
+
       const zoomInputEl = document.getElementById("zoomLevel");
       if (zoomInputEl && map) {
         zoomInputEl.value = map.getZoom().toFixed(0);
-        map.on("zoomend", () => {
-          zoomInputEl.value = map.getZoom().toFixed(0);
+      }
+
+      // Lock grid checkbox wiring
+      const lockEl = document.getElementById("lockGrid");
+      if (lockEl) {
+        if (params.has("lock")) {
+          lockEl.checked = params.get("lock") === "1";
+        }
+        gridLocked = lockEl.checked;
+        lockEl.addEventListener("change", () => {
+          gridLocked = lockEl.checked;
+          updateUrlFromState();
         });
       }
 
+      const showBoundariesEl = document.getElementById("showBoundaries");
+      if (showBoundariesEl) {
+        if (params.has("boundaries")) {
+          showBoundariesEl.checked = params.get("boundaries") !== "0";
+        }
+        showBoundariesEl.addEventListener("change", () => {
+          updateUrlFromState();
+        });
+      }
+
+      // Restore basemap
+      const basemapSelect = document.getElementById("basemapSelect");
+      if (basemapSelect && params.has("basemap")) {
+        const key = params.get("basemap");
+        if (key && baseLayers[key]) {
+          basemapSelect.value = key;
+          setBasemapVisibility(key);
+        }
+      }
+
+      // Restore map center/zoom if present
+      if (params.has("lat") && params.has("lng")) {
+        const lat = parseFloat(params.get("lat"));
+        const lng = parseFloat(params.get("lng"));
+        if (isFinite(lat) && isFinite(lng)) {
+          let zoom = map.getZoom();
+          if (params.has("zoom")) {
+            const zParam = parseFloat(params.get("zoom"));
+            if (isFinite(zParam)) zoom = zParam;
+          }
+          map.setView([lat, lng], zoom, { animate: false });
+          if (zoomInputEl) {
+            zoomInputEl.value = zoom.toFixed(0);
+          }
+        }
+      } else if (params.has("zoom")) {
+        const zParam = parseFloat(params.get("zoom"));
+        if (isFinite(zParam)) {
+          const center = map.getCenter();
+          map.setView(center, zParam, { animate: false });
+          if (zoomInputEl) {
+            zoomInputEl.value = zParam.toFixed(0);
+          }
+        }
+      }
+
+      // Restore grid form values
+      const rowsInput = document.getElementById("rows");
+      const colsInput = document.getElementById("cols");
+      if (rowsInput && params.has("rows")) {
+        rowsInput.value = params.get("rows");
+      }
+      if (colsInput && params.has("cols")) {
+        colsInput.value = params.get("cols");
+      }
+      if (zoomInputEl && params.has("gridZoom")) {
+        zoomInputEl.value = params.get("gridZoom");
+      }
+
+      // Restore paper mode
+      if (params.has("paper")) {
+        const p = params.get("paper");
+        if (p === "A3" || p === "A4" || p === "custom") {
+          paperMode = p;
+        }
+      }
+
+      // Restore grid from bounds if present
+      if (
+        params.has("rows") &&
+        params.has("cols") &&
+        params.has("gswLng") &&
+        params.has("gswLat") &&
+        params.has("gneLng") &&
+        params.has("gneLat")
+      ) {
+        const rows = Math.max(1, parseInt(params.get("rows"), 10) || 1);
+        const cols = Math.max(1, parseInt(params.get("cols"), 10) || 1);
+        const swLng = parseFloat(params.get("gswLng"));
+        const swLat = parseFloat(params.get("gswLat"));
+        const neLng = parseFloat(params.get("gneLng"));
+        const neLat = parseFloat(params.get("gneLat"));
+
+        if (
+          isFinite(swLng) &&
+          isFinite(swLat) &&
+          isFinite(neLng) &&
+          isFinite(neLat)
+        ) {
+          const swM = lngLatToMeters(swLng, swLat);
+          const neM = lngLatToMeters(neLng, neLat);
+          const totalW = neM.x - swM.x;
+          const totalH = neM.y - swM.y;
+          const cellW = totalW / cols;
+          const cellH = totalH / rows;
+
+          const cells = [];
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const minX = swM.x + c * cellW;
+              const maxX = minX + cellW;
+              const minY = swM.y + r * cellH;
+              const maxY = minY + cellH;
+
+              const swLL = metersToLngLat(minX, minY);
+              const neLL = metersToLngLat(maxX, maxY);
+
+              const bbox = [
+                [swLL.lng, swLL.lat],
+                [neLL.lng, neLL.lat]
+              ];
+
+              cells.push({
+                row: r,
+                col: c,
+                bbox
+              });
+            }
+          }
+
+          gridCells = cells;
+          const gridGeoJSON = buildGridGeoJSON(gridCells);
+          ensureGridSourceAndLayer(gridGeoJSON);
+
+          // Compute metrics for display
+          const gridSwLL = { lng: swLng, lat: swLat };
+          const gridNeLL = { lng: neLng, lat: neLat };
+          const centerLat = (gridSwLL.lat + gridNeLL.lat) / 2;
+          const metersPerDegLat = (2 * Math.PI * R) / 360;
+          const metersPerDegLng =
+            ((2 * Math.PI * R) / 360) * Math.cos((centerLat * Math.PI) / 180);
+
+          const gridWidthKmApprox =
+            ((gridNeLL.lng - gridSwLL.lng) * metersPerDegLng) / 1000;
+          const gridHeightKmApprox =
+            ((gridNeLL.lat - gridSwLL.lat) * metersPerDegLat) / 1000;
+
+          const cellWidthKmApprox = gridWidthKmApprox / cols;
+          const cellHeightKmApprox = gridHeightKmApprox / rows;
+          const cellAspect =
+            cellHeightKmApprox !== 0
+              ? cellWidthKmApprox / cellHeightKmApprox
+              : NaN;
+
+          const zoomNow = map.getZoom();
+          const dimsText = `Current grid: zoom ${zoomNow.toFixed(
+            0
+          )}, ≈ ${gridWidthKmApprox.toFixed(
+            3
+          )} × ${gridHeightKmApprox.toFixed(
+            3
+          )} km; cell ≈ ${cellWidthKmApprox.toFixed(
+            3
+          )} × ${cellHeightKmApprox.toFixed(
+            3
+          )} km (aspect ${
+            isFinite(cellAspect) ? cellAspect.toFixed(3) : "–"
+          }, mode ${paperMode}).`;
+
+          setGridDimensionsText(dimsText);
+          setStatus(`Grid restored from URL. ${dimsText}`);
+
+          // Fit map to grid if no explicit lat/lng
+          if (!(params.has("lat") && params.has("lng"))) {
+            const gridBounds = L.latLngBounds(
+              L.latLng(swLat, swLng),
+              L.latLng(neLat, neLng)
+            );
+            map.fitBounds(gridBounds, { animate: false });
+          }
+        }
+      }
+
+      // Wire buttons and controls
       document
         .getElementById("generateGridBtn")
         .addEventListener("click", generateGrid);
@@ -901,29 +1266,34 @@
           if (!mode) return;
           paperMode = mode;
           updatePaperButtons();
-          setStatus(`Paper mode set to ${paperMode}. Regenerate the grid to apply.`);
+          setStatus(
+            `Paper mode set to ${paperMode}. Regenerate the grid to apply.`
+          );
+          updateUrlFromState();
         });
       });
-      // Initialize default mode (A3)
+      // Initialize default mode (A3 or from URL)
       updatePaperButtons();
 
       document
         .getElementById("basemapSelect")
         .addEventListener("change", (e) => {
           setBasemapVisibility(e.target.value);
+          updateUrlFromState();
         });
 
       document
         .getElementById("pixelRatioSelect")
         .addEventListener("change", (e) => {
-          const pr = parseInt(e.target.value, 10) || 2;
+          const prLocal = parseInt(e.target.value, 10) || 2;
           setStatus(
             "Recreating map with new retina/pixel ratio hint..."
           );
-          createMap(pr);
+          createMap(prLocal);
           if (gridCells.length) {
             generateGrid();
           }
+          updateUrlFromState();
         });
 
       document
@@ -943,6 +1313,19 @@
         .addEventListener("keydown", (e) => {
           if (e.key === "Enter") searchLocation();
         });
+
+      // Keep URL in sync on move/zoom
+      map.on("moveend", updateUrlFromState);
+      map.on("zoomend", () => {
+        const zInput = document.getElementById("zoomLevel");
+        if (zInput) {
+          zInput.value = map.getZoom().toFixed(0);
+        }
+        updateUrlFromState();
+      });
+
+      // Initial sync
+      updateUrlFromState();
     });
   </script>
   <div id="exportOverlay"></div>
