@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Map Grid Printer (Leaflet)</title>
+  <title>Map Grid Printer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Leaflet -->
@@ -50,8 +50,8 @@
       overflow-y: auto;
     }
     #sidebar h1 {
-      font-size: 1.2rem;
-      font-weight: 600;
+      font-size: 1.4rem;
+      font-weight: 700;
       margin-bottom: 4px;
     }
     #sidebar h2 {
@@ -145,14 +145,21 @@
     button.secondary:hover:not(:disabled) {
       background: #f3f4f6;
     }
-    button.paper-active {
-      background: #0f766e;
+
+    /* Paper preset buttons: smaller and grayscale */
+    .paper-btn {
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      border-color: #9ca3af;
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .paper-btn.paper-active {
+      background: #4b5563;
+      border-color: #4b5563;
       color: #f9fafb;
-      border-color: #0f766e;
     }
-    button.paper-active.secondary:hover:not(:disabled) {
-      background: #0f766e;
-    }
+
     .status {
       margin-top: 8px;
       font-size: 0.78rem;
@@ -167,19 +174,36 @@
 
     #exportOverlay {
       position: fixed;
-      top: 12px;
-      right: 12px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       z-index: 1000;
-      background: rgba(15, 23, 42, 0.85);
+      background: rgba(15, 23, 42, 0.9);
       color: #f9fafb;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 0.78rem;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 0.95rem;
       display: none;
       align-items: center;
       justify-content: center;
-      pointer-events: none;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: auto;
       box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
+    }
+
+    #cancelExportBtn {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid #f97316;
+      background: #f97316;
+      color: #111827;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    #cancelExportBtn:hover {
+      background: #fb923c;
+      border-color: #fb923c;
     }
 
     #map {
@@ -190,22 +214,16 @@
 </head>
 <body>
   <div id="sidebar">
-    <div class="section">
-      <h1>Map Grid Printer</h1>
-      <p class="desc">
-        Create a grid on the map and export each cell as a PDF.
-      </p>
-    </div>
+    <h1>Map Grid Printer</h1>
 
     <div class="section">
       <h2>Search</h2>
       <div class="inline-fields">
         <div style="flex: 1.7;">
-          <label for="searchInput">Search</label>
-          <input id="searchInput" type="text" placeholder="Place or address" />
+          <input id="searchInput" type="text" placeholder="地名または住所" />
         </div>
         <div style="flex: 0.9; display: flex; align-items: flex-end;">
-          <button id="searchBtn" style="width: 100%;">Search</button>
+          <button id="searchBtn" style="width: 100%;">検索</button>
         </div>
       </div>
     </div>
@@ -223,14 +241,11 @@
         <input id="zoomLevel" type="number" step="1" min="1" max="22" value="11" />
       </div>
       <p class="small-note">
-        Grid uses the current map view. Rows × cols set cells.
-      </p>
-      <p class="small-note">
-        Paper preset:
+        用紙プリセット:
       </p>
       <div class="button-row">
         <button type="button" class="secondary paper-btn" data-paper="A3">
-          A3 (default)
+          A3
         </button>
         <button type="button" class="secondary paper-btn" data-paper="A4">
           A4
@@ -240,12 +255,12 @@
         </button>
       </div>
       <div class="button-row">
-        <button id="generateGridBtn">Generate / Update Grid</button>
+        <button id="generateGridBtn">グリッド作成 / 更新</button>
       </div>
       <div class="small-note" style="margin-top: 4px;">
         <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
           <input id="lockGrid" type="checkbox" checked />
-          <span>Lock grid</span>
+          <span>グリッドを固定</span>
         </label>
       </div>
       <p class="small-note" id="gridDims"></p>
@@ -254,7 +269,6 @@
     <div class="section">
       <h2>Basemap</h2>
       <div class="field-group">
-        <label for="basemapSelect">Tile source</label>
         <select id="basemapSelect">
           <option value="esri">ESRI World Imagery</option>
           <option value="gsi1974">GSI 1974</option>
@@ -265,33 +279,21 @@
           <option value="googleHybrid">Google Hybrid</option>
           <option value="googleMaps">Google Maps</option>
         </select>
-
-        <label for="pixelRatioSelect">Retina / pixel ratio hint</label>
-        <select id="pixelRatioSelect">
-          <option value="1">1 (normal)</option>
-          <option value="2" selected>2 (high)</option>
-        </select>
       </div>
-      <p class="small-note">
-        Change basemap and retina tile hint.
-      </p>
     </div>
 
     <div class="section">
       <h2>Export</h2>
-      <p class="desc">
-        Export all cells to a PDF or save the current view as PNG.
-      </p>
       <div class="small-note" style="margin-top: 4px;">
         <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
           <input id="showBoundaries" type="checkbox" checked />
-          <span>Show grid boundaries in export</span>
+          <span>出力画像にグリッド線を表示</span>
         </label>
       </div>
       <div class="button-row">
-        <button id="exportBtn">Export all cells</button>
+        <button id="exportBtn">全セルをPDF出力</button>
         <button class="secondary" id="exportOneBtn">
-          Export current view (PNG)
+          現在表示をPNG保存
         </button>
       </div>
       <div class="status" id="statusText"></div>
@@ -310,6 +312,7 @@
     let baseLayers = {};
     let currentBaseLayer = null;
     let paperMode = "A3"; // "A3" | "A4" | "custom"
+    let exportCancelRequested = false;
 
     // Grid dragging state
     let isDraggingGrid = false;
@@ -342,13 +345,16 @@
     }
 
     function setExportOverlay(text) {
-      const el = document.getElementById("exportOverlay");
-      if (!el) return;
+      const container = document.getElementById("exportOverlay");
+      if (!container) return;
+      const textEl = document.getElementById("exportOverlayText");
       if (text && text.length) {
-        el.textContent = text;
-        el.style.display = "inline-flex";
+        if (textEl) {
+          textEl.textContent = text;
+        }
+        container.style.display = "flex";
       } else {
-        el.style.display = "none";
+        container.style.display = "none";
       }
     }
 
@@ -412,11 +418,6 @@
       const zoomLevelInput = document.getElementById("zoomLevel");
       if (zoomLevelInput) {
         params.set("gridZoom", zoomLevelInput.value);
-      }
-
-      const pixelRatioSel = document.getElementById("pixelRatioSelect");
-      if (pixelRatioSel) {
-        params.set("pr", pixelRatioSel.value);
       }
 
       const qs = params.toString();
@@ -506,15 +507,17 @@
         center: initialCenter,
         zoom: 11,
         zoomSnap: 1,   // integer zooms only
-        zoomDelta: 1
+        zoomDelta: 1,
+        maxZoom: 22
       });
 
-      // Basemap layers
+      // Basemap layers (allow zoom up to 22)
       baseLayers = {
         esri: L.tileLayer(
           "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution:
               "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
             detectRetina: pixelRatio > 1
@@ -524,6 +527,7 @@
           "https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution: "&copy; GSI Japan 1974",
             detectRetina: pixelRatio > 1
           }
@@ -532,6 +536,7 @@
           "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution: "&copy; GSI Japan Present",
             detectRetina: pixelRatio > 1
           }
@@ -540,6 +545,7 @@
           "https://cyberjapandata.gsi.go.jp/xyz/ort_old10/{z}/{x}/{y}.png",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution: "&copy; GSI Japan 1961",
             detectRetina: pixelRatio > 1
           }
@@ -548,6 +554,7 @@
           "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution: "&copy; GSI Japan 1984",
             detectRetina: pixelRatio > 1
           }
@@ -556,6 +563,7 @@
           "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution: "Imagery © Google",
             detectRetina: pixelRatio > 1
           }
@@ -564,6 +572,7 @@
           "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution: "Imagery © Google",
             detectRetina: pixelRatio > 1
           }
@@ -572,6 +581,7 @@
           "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
           {
             tileSize: 256,
+            maxZoom: 22,
             attribution: "Map data © Google",
             detectRetina: pixelRatio > 1
           }
@@ -783,24 +793,24 @@
 
       const zoomNow = map.getZoom();
 
-      const dimsText = `Current grid: zoom ${zoomNow.toFixed(
+      const dimsText = `現在のグリッド: ズーム ${zoomNow.toFixed(
         0
-      )}, ≈ ${gridWidthKmApprox.toFixed(
+      )}, 全体 ≈ ${gridWidthKmApprox.toFixed(
         3
       )} × ${gridHeightKmApprox.toFixed(
         3
-      )} km; cell ≈ ${cellWidthKmApprox.toFixed(
+      )} km; 1セル ≈ ${cellWidthKmApprox.toFixed(
         3
       )} × ${cellHeightKmApprox.toFixed(
         3
-      )} km (aspect ${
+      )} km (縦横比 ${
         isFinite(cellAspect) ? cellAspect.toFixed(3) : "–"
-      }, mode ${paperMode}).`;
+      }, 用紙モード ${paperMode}).`;
 
       setGridDimensionsText(dimsText);
 
       setStatus(
-        `Grid generated: ${rows} × ${cols}. ${dimsText}`
+        `グリッドを作成しました: ${rows} × ${cols}。${dimsText}`
       );
 
       const zoomInputEl = document.getElementById("zoomLevel");
@@ -816,7 +826,7 @@
       if (!map) return;
       const q = document.getElementById("searchInput").value.trim();
       if (!q) return;
-      setStatus('Searching for "' + q + '"...');
+      setStatus('「' + q + '」を検索中です...');
       fetch(
         "https://nominatim.openstreetmap.org/search?format=json&q=" +
           encodeURIComponent(q)
@@ -824,18 +834,18 @@
         .then((res) => res.json())
         .then((data) => {
           if (!data || !data.length) {
-            setStatus('No results found for "' + q + '".');
+            setStatus('「' + q + '」は見つかりませんでした。');
             return;
           }
           const best = data[0];
           const lat = parseFloat(best.lat);
           const lon = parseFloat(best.lon);
           map.flyTo([lat, lon], 12);
-          setStatus("Moved to " + best.display_name);
+          setStatus("場所を移動しました: " + best.display_name);
         })
         .catch((err) => {
           console.error(err);
-          setStatus("Search failed. Please try again.");
+          setStatus("検索に失敗しました。もう一度お試しください。");
         });
     }
 
@@ -862,7 +872,7 @@
 
           if (err) {
             console.error(err);
-            setStatus("Export failed. Rendering error.");
+            setStatus("エクスポートに失敗しました（描画エラー）。");
             return;
           }
           const dataURL = canvas.toDataURL("image/png");
@@ -873,11 +883,11 @@
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          setStatus("Exported current view as PNG.");
+          setStatus("現在の表示を PNG として保存しました。");
         });
       } catch (e) {
         console.error(e);
-        setStatus("Export failed. Check browser permissions.");
+        setStatus("エクスポートに失敗しました（ブラウザの権限を確認してください）。");
         if (removedGrid && gridLayer && !map.hasLayer(gridLayer)) {
           gridLayer.addTo(map);
         }
@@ -888,9 +898,11 @@
     function exportAllCells() {
       if (!map) return;
       if (!gridCells.length) {
-        alert("Please generate a grid first.");
+        alert("先にグリッドを作成してください。");
         return;
       }
+
+      exportCancelRequested = false;
 
       const exportBtn = document.getElementById("exportBtn");
       const exportOneBtn = document.getElementById("exportOneBtn");
@@ -914,10 +926,28 @@
         removedGridForExport = true;
       }
 
-      setStatus(`Exporting cell 1 of ${total}...`);
-      setExportOverlay(`Exporting cell 1 of ${total}...`);
+      setStatus(`セル 1 / ${total} を出力中...`);
+      setExportOverlay(`セル 1 / ${total} を出力中...`);
+
+      function finalizeExport(options) {
+        const { save, message } = options;
+        if (save && pdf) {
+          pdf.save("map_grid.pdf");
+        }
+        exportBtn.disabled = false;
+        exportOneBtn.disabled = false;
+        setStatus(message);
+        setExportOverlay("");
+        if (removedGridForExport && gridLayer && !map.hasLayer(gridLayer)) {
+          gridLayer.addTo(map);
+        }
+      }
 
       function processNext() {
+        if (exportCancelRequested) {
+          finalizeExport({ save: false, message: "エクスポートをキャンセルしました。" });
+          return;
+        }
         const cell = gridCells[index];
         const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
 
@@ -933,6 +963,11 @@
           if (err) {
             console.error(err);
             afterCapture();
+            return;
+          }
+
+          if (exportCancelRequested) {
+            finalizeExport({ save: false, message: "エクスポートをキャンセルしました。" });
             return;
           }
 
@@ -1013,19 +1048,20 @@
       function afterCapture() {
         index++;
         if (index >= total) {
-          pdf.save("map_grid.pdf");
-          exportBtn.disabled = false;
-          exportOneBtn.disabled = false;
-          setStatus(`Export completed: ${total} cells. PDF downloaded.`);
-          setExportOverlay("");
-
-          // Restore grid layer if we hid it for export
-          if (removedGridForExport && gridLayer && !map.hasLayer(gridLayer)) {
-            gridLayer.addTo(map);
+          if (exportCancelRequested) {
+            finalizeExport({
+              save: false,
+              message: "エクスポートをキャンセルしました。"
+            });
+          } else {
+            finalizeExport({
+              save: true,
+              message: `エクスポート完了: ${total} セルを PDF に保存しました。`
+            });
           }
           return;
         }
-        const stepText = `Exporting cell ${index + 1} of ${total}...`;
+        const stepText = `セル ${index + 1} / ${total} を出力中...`;
         setStatus(stepText);
         setExportOverlay(stepText);
         setTimeout(processNext, 200);
@@ -1038,17 +1074,8 @@
     window.addEventListener("DOMContentLoaded", () => {
       const params = new URLSearchParams(window.location.search);
 
-      const pixelRatioSelect = document.getElementById("pixelRatioSelect");
-      let pr = parseInt(pixelRatioSelect.value, 10) || 2;
-      if (params.has("pr")) {
-        const prParam = parseInt(params.get("pr"), 10);
-        if (!isNaN(prParam)) {
-          pr = prParam;
-          pixelRatioSelect.value = String(prParam);
-        }
-      }
-
-      createMap(pr);
+      // fixed pixel ratio 2
+      createMap(2);
 
       const zoomInputEl = document.getElementById("zoomLevel");
       if (zoomInputEl && map) {
@@ -1213,22 +1240,22 @@
               : NaN;
 
           const zoomNow = map.getZoom();
-          const dimsText = `Current grid: zoom ${zoomNow.toFixed(
+          const dimsText = `現在のグリッド: ズーム ${zoomNow.toFixed(
             0
-          )}, ≈ ${gridWidthKmApprox.toFixed(
+          )}, 全体 ≈ ${gridWidthKmApprox.toFixed(
             3
           )} × ${gridHeightKmApprox.toFixed(
             3
-          )} km; cell ≈ ${cellWidthKmApprox.toFixed(
+          )} km; 1セル ≈ ${cellWidthKmApprox.toFixed(
             3
           )} × ${cellHeightKmApprox.toFixed(
             3
-          )} km (aspect ${
+          )} km (縦横比 ${
             isFinite(cellAspect) ? cellAspect.toFixed(3) : "–"
-          }, mode ${paperMode}).`;
+          }, 用紙モード ${paperMode}).`;
 
           setGridDimensionsText(dimsText);
-          setStatus(`Grid restored from URL. ${dimsText}`);
+          setStatus(`URL からグリッドを復元しました。${dimsText}`);
 
           // Fit map to grid if no explicit lat/lng
           if (!(params.has("lat") && params.has("lng"))) {
@@ -1267,7 +1294,7 @@
           paperMode = mode;
           updatePaperButtons();
           setStatus(
-            `Paper mode set to ${paperMode}. Regenerate the grid to apply.`
+            `用紙モードを ${paperMode} に変更しました。グリッドを再生成してください。`
           );
           updateUrlFromState();
         });
@@ -1279,20 +1306,6 @@
         .getElementById("basemapSelect")
         .addEventListener("change", (e) => {
           setBasemapVisibility(e.target.value);
-          updateUrlFromState();
-        });
-
-      document
-        .getElementById("pixelRatioSelect")
-        .addEventListener("change", (e) => {
-          const prLocal = parseInt(e.target.value, 10) || 2;
-          setStatus(
-            "Recreating map with new retina/pixel ratio hint..."
-          );
-          createMap(prLocal);
-          if (gridCells.length) {
-            generateGrid();
-          }
           updateUrlFromState();
         });
 
@@ -1314,6 +1327,16 @@
           if (e.key === "Enter") searchLocation();
         });
 
+      const cancelBtn = document.getElementById("cancelExportBtn");
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", () => {
+          if (!exportCancelRequested) {
+            exportCancelRequested = true;
+            setStatus("エクスポートをキャンセルしています...");
+          }
+        });
+      }
+
       // Keep URL in sync on move/zoom
       map.on("moveend", updateUrlFromState);
       map.on("zoomend", () => {
@@ -1328,6 +1351,9 @@
       updateUrlFromState();
     });
   </script>
-  <div id="exportOverlay"></div>
+  <div id="exportOverlay">
+    <div id="exportOverlayText"></div>
+    <button id="cancelExportBtn" type="button">キャンセル</button>
+  </div>
 </body>
 </html>
