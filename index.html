@@ -296,6 +296,15 @@
           現在表示をPNG保存
         </button>
       </div>
+      <div class="field-group" style="margin-top: 4px;">
+        <label for="exportRes">解像度</label>
+        <select id="exportRes">
+          <option value="veryHigh">超高</option>
+          <option value="high">高 (推奨)</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+      </div>
       <div class="status" id="statusText"></div>
     </div>
   </div>
@@ -313,6 +322,21 @@
     let currentBaseLayer = null;
     let paperMode = "A3"; // "A3" | "A4" | "custom"
     let exportCancelRequested = false;
+    let exportResolutionMode = "high"; // "veryHigh" | "high" | "medium" | "low"
+    function getExportBaseSize() {
+      switch (exportResolutionMode) {
+        case "low":
+          return 800;    // small / quick check
+        case "medium":
+          return 2000;   // moderate
+        case "high":
+          return 3200;   // high
+        case "veryHigh":
+          return 4800;   // very high for threshold testing
+        default:
+          return 3200;
+      }
+    }
 
     // Grid dragging state
     let isDraggingGrid = false;
@@ -518,6 +542,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 19,
             attribution:
               "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
             detectRetina: pixelRatio > 1
@@ -528,6 +553,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 18,
             attribution: "&copy; GSI Japan 1974",
             detectRetina: pixelRatio > 1
           }
@@ -537,6 +563,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 18,
             attribution: "&copy; GSI Japan Present",
             detectRetina: pixelRatio > 1
           }
@@ -546,6 +573,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 18,
             attribution: "&copy; GSI Japan 1961",
             detectRetina: pixelRatio > 1
           }
@@ -555,6 +583,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 18,
             attribution: "&copy; GSI Japan 1984",
             detectRetina: pixelRatio > 1
           }
@@ -564,6 +593,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 21,
             attribution: "Imagery © Google",
             detectRetina: pixelRatio > 1
           }
@@ -573,6 +603,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 21,
             attribution: "Imagery © Google",
             detectRetina: pixelRatio > 1
           }
@@ -582,6 +613,7 @@
           {
             tileSize: 256,
             maxZoom: 22,
+            maxNativeZoom: 21,
             attribution: "Map data © Google",
             detectRetina: pixelRatio > 1
           }
@@ -689,7 +721,16 @@
         const desiredZoom = parseFloat(zoomInput.value);
         if (isFinite(desiredZoom)) {
           const center = map.getCenter();
-          map.setView(center, desiredZoom, { animate: false });
+          let maxLayerZoom = map.getMaxZoom();
+          if (
+            currentBaseLayer &&
+            typeof currentBaseLayer.options.maxNativeZoom === "number"
+          ) {
+            maxLayerZoom = currentBaseLayer.options.maxNativeZoom;
+          }
+          const targetZoom = Math.min(desiredZoom, maxLayerZoom);
+          map.setView(center, targetZoom, { animate: false });
+          zoomInput.value = targetZoom.toFixed(0);
         }
       }
 
@@ -856,6 +897,12 @@
       const showBoundaries =
         !showBoundariesEl || showBoundariesEl.checked;
 
+      const mapDiv = document.getElementById("map");
+      if (!mapDiv) {
+        setStatus("エクスポートに失敗しました（マップ要素なし）。");
+        return;
+      }
+
       // Temporarily hide grid if boundaries are disabled for export
       let removedGrid = false;
       if (!showBoundaries && gridLayer && map.hasLayer(gridLayer)) {
@@ -863,8 +910,35 @@
         removedGrid = true;
       }
 
+      const originalWidth = mapDiv.style.width;
+      const originalHeight = mapDiv.style.height;
+      const originalSize = map.getSize();
+      const aspect =
+        originalSize.x > 0 && originalSize.y > 0
+          ? originalSize.x / originalSize.y
+          : 1;
+
+      const base = getExportBaseSize();
+      let targetW, targetH;
+      if (aspect >= 1) {
+        targetW = base;
+        targetH = Math.round(base / aspect);
+      } else {
+        targetH = base;
+        targetW = Math.round(base * aspect);
+      }
+
+      mapDiv.style.width = targetW + "px";
+      mapDiv.style.height = targetH + "px";
+      map.invalidateSize();
+
       try {
         leafletImage(map, (err, canvas) => {
+          // Restore map size
+          mapDiv.style.width = originalWidth;
+          mapDiv.style.height = originalHeight;
+          map.invalidateSize();
+
           // Restore grid layer after capture
           if (removedGrid && gridLayer && !map.hasLayer(gridLayer)) {
             gridLayer.addTo(map);
@@ -888,6 +962,10 @@
       } catch (e) {
         console.error(e);
         setStatus("エクスポートに失敗しました（ブラウザの権限を確認してください）。");
+        // Restore size and grid on error
+        mapDiv.style.width = originalWidth;
+        mapDiv.style.height = originalHeight;
+        map.invalidateSize();
         if (removedGrid && gridLayer && !map.hasLayer(gridLayer)) {
           gridLayer.addTo(map);
         }
@@ -955,24 +1033,73 @@
           L.latLng(minLat, minLng),
           L.latLng(maxLat, maxLng)
         );
+        const cellCenter = bounds.getCenter();
 
-        // Fit map to cell bounds; Leaflet uses integer zooms.
-        map.fitBounds(bounds, { animate: false, padding: [0, 0] });
+        const mapDiv = document.getElementById("map");
+        if (!mapDiv) {
+          console.error("Map container not found for export.");
+          afterCapture();
+          return;
+        }
+
+        const originalWidth = mapDiv.style.width;
+        const originalHeight = mapDiv.style.height;
+        const originalSize = map.getSize();
+        const aspect =
+          originalSize.x > 0 && originalSize.y > 0
+            ? originalSize.x / originalSize.y
+            : 1;
+
+        const base = getExportBaseSize();
+        let targetW, targetH;
+        if (aspect >= 1) {
+          targetW = base;
+          targetH = Math.round(base / aspect);
+        } else {
+          targetH = base;
+          targetW = Math.round(base * aspect);
+        }
+
+        // Resize map to export resolution
+        mapDiv.style.width = targetW + "px";
+        mapDiv.style.height = targetH + "px";
+        map.invalidateSize();
+
+        // After resizing, recompute zoom so the cell fits in the resized map
+        let targetZoom = map.getBoundsZoom(bounds, false);
+        let maxLayerZoom = map.getMaxZoom();
+        if (
+          currentBaseLayer &&
+          typeof currentBaseLayer.options.maxNativeZoom === "number"
+        ) {
+          maxLayerZoom = currentBaseLayer.options.maxNativeZoom;
+        }
+        const clampedZoom = Math.min(targetZoom, maxLayerZoom);
+        map.setView(cellCenter, clampedZoom, { animate: false });
 
         leafletImage(map, (err, canvas) => {
+          // Map size in CSS pixels and canvas size in actual pixels (before restoring DOM size)
+          const mapSize = map.getSize();
+
           if (err) {
             console.error(err);
+            // Restore map size before moving on
+            mapDiv.style.width = originalWidth;
+            mapDiv.style.height = originalHeight;
+            map.invalidateSize();
             afterCapture();
             return;
           }
 
           if (exportCancelRequested) {
+            // Restore map size before finalizing
+            mapDiv.style.width = originalWidth;
+            mapDiv.style.height = originalHeight;
+            map.invalidateSize();
             finalizeExport({ save: false, message: "エクスポートをキャンセルしました。" });
             return;
           }
 
-          // Map size in CSS pixels and canvas size in actual pixels
-          const mapSize = map.getSize();
           const scaleX = canvas.width / mapSize.x;
           const scaleY = canvas.height / mapSize.y;
 
@@ -1040,6 +1167,11 @@
           const pageWidth = pdf.internal.pageSize.getWidth();
           const pageHeight = pdf.internal.pageSize.getHeight();
           pdf.addImage(dataURL, "PNG", 0, 0, pageWidth, pageHeight);
+
+          // Restore map size after successful capture
+          mapDiv.style.width = originalWidth;
+          mapDiv.style.height = originalHeight;
+          map.invalidateSize();
 
           afterCapture();
         });
@@ -1326,6 +1458,19 @@
         .addEventListener("keydown", (e) => {
           if (e.key === "Enter") searchLocation();
         });
+
+      const exportResSelect = document.getElementById("exportRes");
+      if (exportResSelect) {
+        exportResSelect.value = exportResolutionMode;
+        exportResSelect.addEventListener("change", (e) => {
+          const val = e.target.value;
+          if (val === "low" || val === "medium" || val === "high" || val === "veryHigh") {
+            exportResolutionMode = val;
+          } else {
+            exportResolutionMode = "high";
+          }
+        });
+      }
 
       const cancelBtn = document.getElementById("cancelExportBtn");
       if (cancelBtn) {
