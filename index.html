@@ -147,7 +147,8 @@
     }
 
     /* Paper preset buttons: smaller and grayscale */
-    .paper-btn {
+    .paper-btn,
+    .orient-btn {
       padding: 3px 8px;
       font-size: 0.75rem;
       border-color: #9ca3af;
@@ -155,6 +156,11 @@
       color: #374151;
     }
     .paper-btn.paper-active {
+      background: #4b5563;
+      border-color: #4b5563;
+      color: #f9fafb;
+    }
+    .orient-btn.orient-active {
       background: #4b5563;
       border-color: #4b5563;
       color: #f9fafb;
@@ -254,6 +260,17 @@
           Custom
         </button>
       </div>
+      <p class="small-note" style="margin-top: 4px;">
+        向き:
+      </p>
+      <div class="button-row">
+        <button type="button" class="secondary orient-btn" data-orient="landscape">
+          横
+        </button>
+        <button type="button" class="secondary orient-btn" data-orient="portrait">
+          縦
+        </button>
+      </div>
       <div class="button-row">
         <button id="generateGridBtn">グリッド作成 / 更新</button>
       </div>
@@ -279,6 +296,25 @@
           <option value="googleHybrid">Google Hybrid</option>
           <option value="googleMaps">Google Maps</option>
         </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>GeoJSON</h2>
+      <p class="small-note">
+        GeoJSON の URL を指定してオーバーレイ表示します。
+      </p>
+      <div class="field-group">
+        <label for="geojsonUrl">URL</label>
+        <input
+          id="geojsonUrl"
+          type="text"
+          placeholder="https://example.com/data.geojson"
+        />
+      </div>
+      <div class="button-row">
+        <button id="loadGeojsonBtn" class="secondary">読み込み</button>
+        <button id="clearGeojsonBtn" class="secondary">クリア</button>
       </div>
     </div>
 
@@ -321,8 +357,10 @@
     let baseLayers = {};
     let currentBaseLayer = null;
     let paperMode = "A3"; // "A3" | "A4" | "custom"
+    let paperOrientation = "landscape"; // "landscape" | "portrait"
     let exportCancelRequested = false;
     let exportResolutionMode = "high"; // "veryHigh" | "high" | "medium" | "low"
+    let geojsonOverlay = null; // GeoJSON overlay layer
     function getExportBaseSize() {
       switch (exportResolutionMode) {
         case "low":
@@ -382,6 +420,60 @@
       }
     }
 
+    function loadGeoJSONFromUrl() {
+      if (!map) return;
+      const input = document.getElementById("geojsonUrl");
+      if (!input) return;
+      const url = input.value.trim();
+      if (!url) {
+        setStatus("GeoJSON の URL を入力してください。");
+        return;
+      }
+      setStatus("GeoJSON を読み込み中です...");
+      fetch(url)
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("HTTP " + res.status);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (geojsonOverlay && map.hasLayer(geojsonOverlay)) {
+            map.removeLayer(geojsonOverlay);
+          }
+          geojsonOverlay = L.geoJSON(data, {
+            style: {
+              color: "#ef4444",      // red outline
+              weight: 2,
+              fillColor: "#ef4444",
+              fillOpacity: 0.0       // transparent fill
+            }
+          }).addTo(map);
+          try {
+            const b = geojsonOverlay.getBounds();
+            if (b.isValid()) {
+              map.fitBounds(b, { animate: true });
+            }
+          } catch (e) {
+            console.warn("Could not fit bounds for GeoJSON overlay:", e);
+          }
+          setStatus("GeoJSON レイヤーを読み込みました。");
+        })
+        .catch((err) => {
+          console.error(err);
+          setStatus("GeoJSON の読み込みに失敗しました。CORS や URL を確認してください。");
+        });
+    }
+
+    function clearGeoJSONOverlay() {
+      if (!map) return;
+      if (geojsonOverlay && map.hasLayer(geojsonOverlay)) {
+        map.removeLayer(geojsonOverlay);
+      }
+      geojsonOverlay = null;
+      setStatus("GeoJSON レイヤーをクリアしました。");
+    }
+
     function updateUrlFromState() {
       if (!map) return;
 
@@ -428,6 +520,7 @@
         }
         params.set("paper", paperMode);
       }
+      params.set("orient", paperOrientation);
 
       const showBoundariesEl = document.getElementById("showBoundaries");
       if (showBoundariesEl) {
@@ -757,13 +850,17 @@
       const centerY = (viewSwM.y + viewNeM.y) / 2;
 
       // Adjust the grid extent to match A-series aspect ratios when requested.
-      // A-series has aspect ratio sqrt(2) between long and short side.
-      // Here:
-      //   A3  -> landscape: width / height = sqrt(2)
-      //   A4  -> portrait:  height / width = sqrt(2) => width / height = 1 / sqrt(2)
+      // A-series has aspect ratio sqrt(2) between the long and short side.
+      // We use:
+      //   landscape: width / height = sqrt(2)
+      //   portrait:  width / height = 1 / sqrt(2)
       if (paperMode === "A3" || paperMode === "A4") {
+        const longOverShort = Math.SQRT2;
         const targetAR =
-          paperMode === "A3" ? Math.SQRT2 : 1 / Math.SQRT2; // width / height
+          paperOrientation === "landscape"
+            ? longOverShort
+            : 1 / longOverShort; // width / height
+
         // Fit the largest rectangle of aspect targetAR inside the current view
         // Option 1: height-limited
         let newH = viewHeight;
@@ -846,7 +943,9 @@
         3
       )} km (縦横比 ${
         isFinite(cellAspect) ? cellAspect.toFixed(3) : "–"
-      }, 用紙モード ${paperMode}).`;
+      }, 用紙モード ${paperMode} / ${
+        paperOrientation === "landscape" ? "横" : "縦"
+      }).`;
 
       setGridDimensionsText(dimsText);
 
@@ -1294,6 +1393,14 @@
         }
       }
 
+      // Restore orientation
+      if (params.has("orient")) {
+        const o = params.get("orient");
+        if (o === "landscape" || o === "portrait") {
+          paperOrientation = o;
+        }
+      }
+
       // Restore grid from bounds if present
       if (
         params.has("rows") &&
@@ -1383,8 +1490,10 @@
           )} × ${cellHeightKmApprox.toFixed(
             3
           )} km (縦横比 ${
-            isFinite(cellAspect) ? cellAspect.toFixed(3) : "–"
-          }, 用紙モード ${paperMode}).`;
+              isFinite(cellAspect) ? cellAspect.toFixed(3) : "–"
+            }, 用紙モード ${paperMode} / ${
+              paperOrientation === "landscape" ? "横" : "縦"
+            }).`;
 
           setGridDimensionsText(dimsText);
           setStatus(`URL からグリッドを復元しました。${dimsText}`);
@@ -1434,6 +1543,39 @@
       // Initialize default mode (A3 or from URL)
       updatePaperButtons();
 
+      // Orientation buttons (landscape / portrait)
+      const orientButtons = Array.from(
+        document.querySelectorAll(".orient-btn")
+      );
+      function updateOrientButtons() {
+        orientButtons.forEach((btn) => {
+          const o = btn.getAttribute("data-orient");
+          if (o === paperOrientation) {
+            btn.classList.add("orient-active");
+          } else {
+            btn.classList.remove("orient-active");
+          }
+        });
+      }
+      orientButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const o = btn.getAttribute("data-orient");
+          if (!o) return;
+          if (o === "landscape" || o === "portrait") {
+            paperOrientation = o;
+            updateOrientButtons();
+            setStatus(
+              `用紙の向きを ${
+                paperOrientation === "landscape" ? "横" : "縦"
+              } に変更しました。グリッドを再生成してください。`
+            );
+            updateUrlFromState();
+          }
+        });
+      });
+      // Initialize orientation buttons from current state or URL
+      updateOrientButtons();
+
       document
         .getElementById("basemapSelect")
         .addEventListener("change", (e) => {
@@ -1458,6 +1600,15 @@
         .addEventListener("keydown", (e) => {
           if (e.key === "Enter") searchLocation();
         });
+
+      const loadGeojsonBtn = document.getElementById("loadGeojsonBtn");
+      if (loadGeojsonBtn) {
+        loadGeojsonBtn.addEventListener("click", loadGeoJSONFromUrl);
+      }
+      const clearGeojsonBtn = document.getElementById("clearGeojsonBtn");
+      if (clearGeojsonBtn) {
+        clearGeojsonBtn.addEventListener("click", clearGeoJSONOverlay);
+      }
 
       const exportResSelect = document.getElementById("exportRes");
       if (exportResSelect) {
