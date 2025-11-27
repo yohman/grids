@@ -1,19 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <title>Map Grid Printer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Leaflet -->
+  <!-- MapLibre -->
   <link
+    href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css"
     rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- leaflet-image for exporting map to canvas -->
-  <script src="https://unpkg.com/leaflet-image/leaflet-image.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
 
   <!-- jsPDF for PDF export -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
@@ -29,7 +26,7 @@
       height: 100%;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
         sans-serif;
-      color: #222;
+      color: #111827;
     }
     body {
       display: flex;
@@ -42,7 +39,7 @@
       min-width: 320px;
       max-width: 380px;
       padding: 16px 16px 24px;
-      border-right: 1px solid #ddd;
+      border-right: 1px solid #d1d5db;
       background: #f9fafb;
       display: flex;
       flex-direction: column;
@@ -50,21 +47,15 @@
       overflow-y: auto;
     }
     #sidebar h1 {
-      font-size: 1.4rem;
+      font-size: 1.5rem;
       font-weight: 700;
       margin-bottom: 4px;
     }
     #sidebar h2 {
       font-size: 1rem;
       font-weight: 600;
-      margin-top: 8px;
+      margin-top: 4px;
       margin-bottom: 4px;
-    }
-    #sidebar p.desc {
-      font-size: 0.8rem;
-      color: #555;
-      margin-bottom: 8px;
-      line-height: 1.4;
     }
     .section {
       padding: 10px 12px;
@@ -72,9 +63,10 @@
       border-radius: 8px;
       box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
     }
+
     .field-group {
       display: grid;
-      grid-template-columns: 1.3fr 1.1fr;
+      grid-template-columns: 1.2fr 1.1fr;
       gap: 6px 8px;
       align-items: center;
       font-size: 0.85rem;
@@ -91,19 +83,14 @@
       border: 1px solid #cbd5e1;
       font-size: 0.85rem;
     }
+
     .inline-fields {
       display: flex;
       gap: 8px;
-      margin-top: 8px;
+      margin-top: 4px;
     }
     .inline-fields > div {
       flex: 1;
-    }
-    .inline-fields label {
-      display: block;
-      font-size: 0.8rem;
-      margin-bottom: 2px;
-      color: #374151;
     }
     .inline-fields input {
       width: 100%;
@@ -112,12 +99,14 @@
       border: 1px solid #cbd5e1;
       font-size: 0.85rem;
     }
+
     .button-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 8px;
     }
+
     button {
       padding: 6px 10px;
       border-radius: 6px;
@@ -146,7 +135,7 @@
       background: #f3f4f6;
     }
 
-    /* Paper preset buttons: smaller and grayscale */
+    /* Paper preset / orientation buttons: smaller and grayscale */
     .paper-btn,
     .orient-btn {
       padding: 3px 8px;
@@ -166,27 +155,39 @@
       color: #f9fafb;
     }
 
-    .status {
-      margin-top: 8px;
-      font-size: 0.78rem;
-      color: #4b5563;
-      min-height: 1.2em;
-    }
     .small-note {
       margin-top: 6px;
       font-size: 0.75rem;
       color: #6b7280;
     }
 
+    .status {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: #4b5563;
+      min-height: 1.2em;
+    }
+
+    #map {
+      flex: 1;
+      height: 100%;
+    }
+
+    /* MapLibre map canvas */
+    .maplibregl-map {
+      font: inherit;
+    }
+
+    /* Export overlay */
     #exportOverlay {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 1000;
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(15, 23, 42, 0.92);
       color: #f9fafb;
-      padding: 16px 20px;
+      padding: 18px 22px;
       border-radius: 12px;
       font-size: 0.95rem;
       display: none;
@@ -197,7 +198,9 @@
       pointer-events: auto;
       box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
     }
-
+    #exportOverlayText {
+      font-size: 0.95rem;
+    }
     #cancelExportBtn {
       padding: 6px 12px;
       border-radius: 999px;
@@ -211,10 +214,26 @@
       background: #fb923c;
       border-color: #fb923c;
     }
-
-    #map {
-      flex: 1;
+    #exportOverlayDetail {
+      font-size: 0.8rem;
+      color: #e5e7eb;
+      margin-top: 4px;
+      text-align: center;
+    }
+    #exportProgressBar {
+      width: 100%;
+      height: 6px;
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+      display: none;
+    }
+    #exportProgressBarInner {
+      width: 0%;
       height: 100%;
+      background: #f97316;
+      transition: width 0.15s ease-out;
     }
   </style>
 </head>
@@ -222,6 +241,7 @@
   <div id="sidebar">
     <h1>Map Grid Printer</h1>
 
+    <!-- Search -->
     <div class="section">
       <h2>Search</h2>
       <div class="inline-fields">
@@ -234,6 +254,7 @@
       </div>
     </div>
 
+    <!-- Grid settings -->
     <div class="section">
       <h2>Grid settings</h2>
       <div class="field-group">
@@ -246,43 +267,35 @@
         <label for="zoomLevel">Zoom</label>
         <input id="zoomLevel" type="number" step="1" min="1" max="22" value="11" />
       </div>
-      <p class="small-note">
-        用紙プリセット:
-      </p>
+
+      <p class="small-note">用紙プリセット:</p>
       <div class="button-row">
-        <button type="button" class="secondary paper-btn" data-paper="A3">
-          A3
-        </button>
-        <button type="button" class="secondary paper-btn" data-paper="A4">
-          A4
-        </button>
-        <button type="button" class="secondary paper-btn" data-paper="custom">
-          Custom
-        </button>
+        <button type="button" class="secondary paper-btn" data-paper="A3">A3</button>
+        <button type="button" class="secondary paper-btn" data-paper="A4">A4</button>
+        <button type="button" class="secondary paper-btn" data-paper="custom">Custom</button>
       </div>
-      <p class="small-note" style="margin-top: 4px;">
-        向き:
-      </p>
+
+      <p class="small-note" style="margin-top: 4px;">向き:</p>
       <div class="button-row">
-        <button type="button" class="secondary orient-btn" data-orient="landscape">
-          横
-        </button>
-        <button type="button" class="secondary orient-btn" data-orient="portrait">
-          縦
-        </button>
+        <button type="button" class="secondary orient-btn" data-orient="landscape">横</button>
+        <button type="button" class="secondary orient-btn" data-orient="portrait">縦</button>
       </div>
+
       <div class="button-row">
         <button id="generateGridBtn">グリッド作成 / 更新</button>
       </div>
+
       <div class="small-note" style="margin-top: 4px;">
         <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
           <input id="lockGrid" type="checkbox" checked />
           <span>グリッドを固定</span>
         </label>
       </div>
+
       <p class="small-note" id="gridDims"></p>
     </div>
 
+    <!-- Basemap -->
     <div class="section">
       <h2>Basemap</h2>
       <div class="field-group">
@@ -299,17 +312,16 @@
       </div>
     </div>
 
+    <!-- GeoJSON overlay -->
     <div class="section">
       <h2>GeoJSON</h2>
-      <p class="small-note">
-        GeoJSON の URL を指定してオーバーレイ表示します。
-      </p>
+      <p class="small-note">GeoJSON の URL を指定してオーバーレイ表示します。</p>
       <div class="field-group">
         <label for="geojsonUrl">URL</label>
         <input
           id="geojsonUrl"
           type="text"
-          placeholder="https://example.com/data.geojson"
+          placeholder="https://raw.githubusercontent.com/yohman/grids/refs/heads/main/takashima.geojson"
         />
       </div>
       <div class="button-row">
@@ -318,6 +330,7 @@
       </div>
     </div>
 
+    <!-- Export -->
     <div class="section">
       <h2>Export</h2>
       <div class="small-note" style="margin-top: 4px;">
@@ -328,15 +341,13 @@
       </div>
       <div class="button-row">
         <button id="exportBtn">全セルをPDF出力</button>
-        <button class="secondary" id="exportOneBtn">
-          現在表示をPNG保存
-        </button>
+        <button class="secondary" id="exportOneBtn">現在表示をPNG保存</button>
       </div>
       <div class="field-group" style="margin-top: 4px;">
         <label for="exportRes">解像度</label>
         <select id="exportRes">
           <option value="veryHigh">超高</option>
-          <option value="high">高 (推奨)</option>
+          <option value="high" selected>高 (推奨)</option>
           <option value="medium">中</option>
           <option value="low">低</option>
         </select>
@@ -347,41 +358,87 @@
 
   <div id="map"></div>
 
-  <script>
-    // ========= Constants and helpers =========
-    const R = 6378137; // WebMercator radius
-    let map;
-    let gridCells = []; // [{row, col, bbox: [[minLng, minLat], [maxLng, maxLat]]}]
-    let gridLayer = null;
-    let currentPixelRatio = 2;
-    let baseLayers = {};
-    let currentBaseLayer = null;
-    let paperMode = "A3"; // "A3" | "A4" | "custom"
-    let paperOrientation = "landscape"; // "landscape" | "portrait"
-    let exportCancelRequested = false;
-    let exportResolutionMode = "high"; // "veryHigh" | "high" | "medium" | "low"
-    let geojsonOverlay = null; // GeoJSON overlay layer
-    function getExportBaseSize() {
-      switch (exportResolutionMode) {
-        case "low":
-          return 800;    // small / quick check
-        case "medium":
-          return 2000;   // moderate
-        case "high":
-          return 3200;   // high
-        case "veryHigh":
-          return 4800;   // very high for threshold testing
-        default:
-          return 3200;
-      }
-    }
+  <!-- Export overlay (centered) -->
+  <div id="exportOverlay">
+    <div id="exportOverlayText"></div>
+    <div id="exportOverlayDetail"></div>
+    <div id="exportProgressBar">
+      <div id="exportProgressBarInner"></div>
+    </div>
+    <button id="cancelExportBtn" type="button">キャンセル</button>
+  </div>
 
-    // Grid dragging state
+  <script>
+    // ===== Constants and globals =====
+    const R = 6378137; // WebMercator radius
+    const TILE_SIZE = 256;
+
+    let map;
+    let gridCells = []; // [{row,col,bbox:[[minLng,minLat],[maxLng,maxLat]]}]
+    let paperMode = "A3";
+    let paperOrientation = "landscape";
+    let gridZoomForExport = null;
+
+    let exportResolutionMode = "high";
+    let exportCancelRequested = false;
+    let exportTotalCells = 0;
+
+    let gridLocked = false;
     let isDraggingGrid = false;
     let dragStartMeters = null;
     let dragStartCells = null;
-    let gridLocked = false;
 
+    let currentBaseKey = "esri";
+
+    const basemapConfigs = {
+      esri: {
+        template:
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        maxZoom: 22,
+        maxNativeZoom: 19
+      },
+      gsi1974: {
+        template:
+          "https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg",
+        maxZoom: 22,
+        maxNativeZoom: 18
+      },
+      gsiPresent: {
+        template:
+          "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+        maxZoom: 22,
+        maxNativeZoom: 18
+      },
+      gsi1961: {
+        template:
+          "https://cyberjapandata.gsi.go.jp/xyz/ort_old10/{z}/{x}/{y}.png",
+        maxZoom: 22,
+        maxNativeZoom: 18
+      },
+      gsi1984: {
+        template:
+          "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
+        maxZoom: 22,
+        maxNativeZoom: 18
+      },
+      googleSat: {
+        template: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        maxZoom: 22,
+        maxNativeZoom: 21
+      },
+      googleHybrid: {
+        template: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        maxZoom: 22,
+        maxNativeZoom: 21
+      },
+      googleMaps: {
+        template: "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+        maxZoom: 22,
+        maxNativeZoom: 21
+      }
+    };
+
+    // ===== Helpers =====
     function lngLatToMeters(lng, lat) {
       const x = (lng * Math.PI * R) / 180;
       const y = R * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
@@ -396,8 +453,236 @@
       return { lng, lat };
     }
 
+    function latLngToWorldPx(lat, lng, z) {
+      const scale = TILE_SIZE * Math.pow(2, z);
+      const x = ((lng + 180) / 360) * scale;
+      const sinLat = Math.sin((lat * Math.PI) / 180);
+      const y =
+        (0.5 -
+          Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) *
+        scale;
+      return { x, y };
+    }
+
+    function getExportBaseSize() {
+      // ベースとなる解像度（1ページあたりのターゲットピクセル数の平方根）
+      let base;
+      switch (exportResolutionMode) {
+        case "low":
+          base = 800;
+          break;
+        case "medium":
+          base = 2000;
+          break;
+        case "high":
+          base = 3200;
+          break;
+        case "veryHigh":
+          base = 4800;
+          break;
+        default:
+          base = 3200;
+          break;
+      }
+
+      // グリッド数が多いときは、PDF 全体のピクセル数が大きくなりすぎて
+      // jsPDF が RangeError（Invalid string length）を出すので、
+      // 1ページあたりのベースサイズを自動的に下げる。
+      const pages = Array.isArray(gridCells) ? gridCells.length : 0;
+
+      // 4セル以下（例: 2×2）は今まで通りフル解像度を維持
+      if (!pages || pages <= 4) {
+        return base;
+      }
+
+      // だいたい 2 億ピクセル程度を上限にする（25ページなどでも安全な範囲）
+      const maxTotalPixels = 200_000_000; // 200M
+      // このとき 1ページあたりの推奨最大サイズ（1辺の長さ）を逆算
+      // sqrt(maxTotalPixels / pages)
+      const maxPerPageSide = Math.sqrt(maxTotalPixels / pages);
+
+      // jsPDF の 1ページあたりの最大サイズ（内部制限）とも整合を取る
+      const PDF_MAX_SIDE = 14000;
+      const safePerPageSide = Math.min(maxPerPageSide, PDF_MAX_SIDE);
+
+      // base が安全な上限を超えている場合のみ縮小
+      const adjustedBase = Math.min(base, safePerPageSide);
+
+      // あまり小さくなりすぎると意味がないので、最低 800px は確保
+      return Math.max(800, Math.round(adjustedBase));
+    }
+    function getTileTemplate() {
+      const cfg = basemapConfigs[currentBaseKey];
+      return cfg ? cfg.template : null;
+    }
+
+    function buildTileUrl(template, z, x, y) {
+      return template
+        .replace("{z}", z)
+        .replace("{x}", x)
+        .replace("{y}", y);
+    }
+
+    // Per-cell export zoom to roughly match desired pixel size
+    function getTileExportZoomForCell(cell) {
+      if (!cell || !cell.bbox) {
+        return 18;
+      }
+
+      const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
+
+      const base = getExportBaseSize();
+
+      const sw0 = latLngToWorldPx(minLat, minLng, 0);
+      const ne0 = latLngToWorldPx(maxLat, maxLng, 0);
+      const w0 = Math.abs(ne0.x - sw0.x);
+      const h0 = Math.abs(ne0.y - sw0.y);
+      const long0 = Math.max(w0, h0);
+      if (!isFinite(long0) || long0 <= 0) {
+        return 18;
+      }
+
+      let z = Math.log2(base / long0);
+      if (!isFinite(z)) {
+        return 18;
+      }
+      z = Math.round(z);
+
+      const cfg = basemapConfigs[currentBaseKey];
+      let maxNative = (cfg && typeof cfg.maxNativeZoom === "number")
+        ? cfg.maxNativeZoom
+        : 22;
+      const maxAllowed = maxNative + 2;
+      z = Math.max(0, Math.min(z, maxAllowed));
+
+      return z;
+    }
+
+    async function renderCellViaTiles(cell, tileTemplate) {
+      const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
+      const z = getTileExportZoomForCell(cell);
+
+      const swPx = latLngToWorldPx(minLat, minLng, z);
+      const nePx = latLngToWorldPx(maxLat, maxLng, z);
+
+      const minPxX = Math.min(swPx.x, nePx.x);
+      const maxPxX = Math.max(swPx.x, nePx.x);
+      const minPxY = Math.min(swPx.y, nePx.y);
+      const maxPxY = Math.max(swPx.y, nePx.y);
+
+      const maxIndex = Math.pow(2, z) - 1;
+      const minTileX = Math.max(0, Math.floor(minPxX / TILE_SIZE));
+      const maxTileX = Math.min(maxIndex, Math.floor(maxPxX / TILE_SIZE));
+      const minTileY = Math.max(0, Math.floor(minPxY / TILE_SIZE));
+      const maxTileY = Math.min(maxIndex, Math.floor(maxPxY / TILE_SIZE));
+
+      const tilesX = maxTileX - minTileX + 1;
+      const tilesY = maxTileY - minTileY + 1;
+      const tileCount = tilesX * tilesY;
+
+      const stitchWidth = tilesX * TILE_SIZE;
+      const stitchHeight = tilesY * TILE_SIZE;
+
+      const stitchCanvas = document.createElement("canvas");
+      stitchCanvas.width = stitchWidth;
+      stitchCanvas.height = stitchHeight;
+      const ctx = stitchCanvas.getContext("2d");
+
+      const loadPromises = [];
+      for (let ty = minTileY; ty <= maxTileY; ty++) {
+        for (let tx = minTileX; tx <= maxTileX; tx++) {
+          const dx = (tx - minTileX) * TILE_SIZE;
+          const dy = (ty - minTileY) * TILE_SIZE;
+          const url = buildTileUrl(tileTemplate, z, tx, ty);
+          loadPromises.push(
+            new Promise((resolve) => {
+              const img = new Image();
+              img.crossOrigin = "anonymous";
+              img.onload = function () {
+                try {
+                  ctx.drawImage(img, dx, dy);
+                } catch (e) {
+                  console.warn("drawImage failed for", url, e);
+                }
+                resolve(true);
+              };
+              img.onerror = function () {
+                console.warn("tile load failed:", url);
+                resolve(false);
+              };
+              img.src = url;
+            })
+          );
+        }
+      }
+
+      await Promise.all(loadPromises);
+
+      const originWorldX = minTileX * TILE_SIZE;
+      const originWorldY = minTileY * TILE_SIZE;
+
+      const cropX = Math.round(minPxX - originWorldX);
+      const cropY = Math.round(minPxY - originWorldY);
+      const cropW = Math.round(maxPxX - minPxX);
+      const cropH = Math.round(maxPxY - minPxY);
+
+      const cropCanvas = document.createElement("canvas");
+      cropCanvas.width = cropW;
+      cropCanvas.height = cropH;
+      const cropCtx = cropCanvas.getContext("2d");
+
+      cropCtx.drawImage(
+        stitchCanvas,
+        cropX,
+        cropY,
+        cropW,
+        cropH,
+        0,
+        0,
+        cropW,
+        cropH
+      );
+
+      // PDF scaling: only clamp to jsPDF's per-page max size; no global pixel budget
+      const PDF_MAX_SIDE = 14000;
+      const maxSide = Math.max(cropW, cropH);
+
+      let scale = 1;
+      if (maxSide > PDF_MAX_SIDE) {
+        scale = PDF_MAX_SIDE / maxSide;
+      }
+
+      if (scale >= 0.999) {
+        // No significant scaling needed; return native resolution
+        return { canvas: cropCanvas, width: cropW, height: cropH, tileCount };
+      }
+
+      const targetW = Math.max(1, Math.round(cropW * scale));
+      const targetH = Math.max(1, Math.round(cropH * scale));
+
+      const scaledCanvas = document.createElement("canvas");
+      scaledCanvas.width = targetW;
+      scaledCanvas.height = targetH;
+      const scaledCtx = scaledCanvas.getContext("2d");
+      scaledCtx.drawImage(
+        cropCanvas,
+        0,
+        0,
+        cropW,
+        cropH,
+        0,
+        0,
+        targetW,
+        targetH
+      );
+
+      return { canvas: scaledCanvas, width: targetW, height: targetH, tileCount };
+    }
+
     function setStatus(msg) {
-      document.getElementById("statusText").textContent = msg || "";
+      const el = document.getElementById("statusText");
+      if (!el) return;
+      el.textContent = msg || "";
     }
 
     function setGridDimensionsText(msg) {
@@ -406,78 +691,42 @@
       el.textContent = msg || "";
     }
 
-    function setExportOverlay(text) {
+    function setExportOverlay(text, detail, progressFraction) {
       const container = document.getElementById("exportOverlay");
       if (!container) return;
       const textEl = document.getElementById("exportOverlayText");
+      const detailEl = document.getElementById("exportOverlayDetail");
+      const barOuter = document.getElementById("exportProgressBar");
+      const barInner = document.getElementById("exportProgressBarInner");
+
       if (text && text.length) {
-        if (textEl) {
-          textEl.textContent = text;
-        }
+        if (textEl) textEl.textContent = text;
+        if (detailEl) detailEl.textContent = detail || "";
         container.style.display = "flex";
+
+        if (typeof progressFraction === "number" && barOuter && barInner) {
+          const clamped = Math.max(0, Math.min(1, progressFraction));
+          barOuter.style.display = "block";
+          barInner.style.width = (clamped * 100).toFixed(1) + "%";
+        } else if (barOuter && barInner) {
+          barOuter.style.display = "none";
+          barInner.style.width = "0%";
+        }
       } else {
         container.style.display = "none";
+        if (detailEl) detailEl.textContent = "";
+        if (barOuter && barInner) {
+          barOuter.style.display = "none";
+          barInner.style.width = "0%";
+        }
       }
     }
 
-    function loadGeoJSONFromUrl() {
-      if (!map) return;
-      const input = document.getElementById("geojsonUrl");
-      if (!input) return;
-      const url = input.value.trim();
-      if (!url) {
-        setStatus("GeoJSON の URL を入力してください。");
-        return;
-      }
-      setStatus("GeoJSON を読み込み中です...");
-      fetch(url)
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error("HTTP " + res.status);
-          }
-          return res.json();
-        })
-        .then((data) => {
-          if (geojsonOverlay && map.hasLayer(geojsonOverlay)) {
-            map.removeLayer(geojsonOverlay);
-          }
-          geojsonOverlay = L.geoJSON(data, {
-            style: {
-              color: "#ef4444",      // red outline
-              weight: 2,
-              fillColor: "#ef4444",
-              fillOpacity: 0.0       // transparent fill
-            }
-          }).addTo(map);
-          try {
-            const b = geojsonOverlay.getBounds();
-            if (b.isValid()) {
-              map.fitBounds(b, { animate: true });
-            }
-          } catch (e) {
-            console.warn("Could not fit bounds for GeoJSON overlay:", e);
-          }
-          setStatus("GeoJSON レイヤーを読み込みました。");
-        })
-        .catch((err) => {
-          console.error(err);
-          setStatus("GeoJSON の読み込みに失敗しました。CORS や URL を確認してください。");
-        });
-    }
-
-    function clearGeoJSONOverlay() {
-      if (!map) return;
-      if (geojsonOverlay && map.hasLayer(geojsonOverlay)) {
-        map.removeLayer(geojsonOverlay);
-      }
-      geojsonOverlay = null;
-      setStatus("GeoJSON レイヤーをクリアしました。");
-    }
-
+    // ===== URL sync =====
     function updateUrlFromState() {
       if (!map) return;
-
       const params = new URLSearchParams();
+
       const center = map.getCenter();
       params.set("lat", center.lat.toFixed(6));
       params.set("lng", center.lng.toFixed(6));
@@ -496,10 +745,8 @@
       }
 
       if (gridCells.length) {
-        let minLng = Infinity;
-        let minLat = Infinity;
-        let maxLng = -Infinity;
-        let maxLat = -Infinity;
+        let minLng = Infinity, minLat = Infinity;
+        let maxLng = -Infinity, maxLat = -Infinity;
         gridCells.forEach((cell) => {
           const [[cMinLng, cMinLat], [cMaxLng, cMaxLat]] = cell.bbox;
           if (cMinLng < minLng) minLng = cMinLng;
@@ -508,10 +755,8 @@
           if (cMaxLat > maxLat) maxLat = cMaxLat;
         });
         if (
-          isFinite(minLng) &&
-          isFinite(minLat) &&
-          isFinite(maxLng) &&
-          isFinite(maxLat)
+          isFinite(minLng) && isFinite(minLat) &&
+          isFinite(maxLng) && isFinite(maxLat)
         ) {
           params.set("gswLng", minLng.toFixed(6));
           params.set("gswLat", minLat.toFixed(6));
@@ -532,9 +777,9 @@
         params.set("lock", lockEl.checked ? "1" : "0");
       }
 
-      const zoomLevelInput = document.getElementById("zoomLevel");
-      if (zoomLevelInput) {
-        params.set("gridZoom", zoomLevelInput.value);
+      const zoomInputEl = document.getElementById("zoomLevel");
+      if (zoomInputEl) {
+        params.set("gridZoom", zoomInputEl.value);
       }
 
       const qs = params.toString();
@@ -544,13 +789,62 @@
       window.history.replaceState(null, "", newUrl);
     }
 
-    // ========= Grid drag handlers =========
-    function onGridMouseDown(e) {
-      if (!map || !gridCells.length) return;
-      if (gridLocked) return;
-      const latlng = e.latlng;
-      dragStartMeters = lngLatToMeters(latlng.lng, latlng.lat);
-      // Deep copy of current gridCells
+    // ===== Grid drawing & dragging =====
+    function buildGridGeoJSON(cells) {
+      return {
+        type: "FeatureCollection",
+        features: cells.map((cell) => {
+          const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
+          return {
+            type: "Feature",
+            properties: {
+              row: cell.row,
+              col: cell.col,
+              id: `r${cell.row + 1}_c${cell.col + 1}`
+            },
+            geometry: {
+              type: "Polygon",
+              coordinates: [[
+                [minLng, minLat],
+                [maxLng, minLat],
+                [maxLng, maxLat],
+                [minLng, maxLat],
+                [minLng, minLat]
+              ]]
+            }
+          };
+        })
+      };
+    }
+
+    function ensureGridLayer() {
+      if (!map) return;
+      const src = map.getSource("grid");
+      if (src && src.setData) {
+        src.setData(buildGridGeoJSON(gridCells));
+      }
+    }
+
+    function pointInAnyCell(lng, lat) {
+      for (const cell of gridCells) {
+        const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
+        if (
+          lng >= minLng && lng <= maxLng &&
+          lat >= minLat && lat <= maxLat
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function onMapMouseDown(e) {
+      if (!map || !gridCells.length || gridLocked) return;
+      const { lng, lat } = e.lngLat;
+      if (!pointInAnyCell(lng, lat)) return;
+
+      const m = lngLatToMeters(lng, lat);
+      dragStartMeters = m;
       dragStartCells = gridCells.map((cell) => ({
         row: cell.row,
         col: cell.col,
@@ -560,19 +854,20 @@
         ]
       }));
       isDraggingGrid = true;
-      if (map.dragging && map.dragging.enabled()) {
-        map.dragging.disable();
+
+      if (map.dragPan) {
+        map.dragPan.disable();
       }
       if (e.originalEvent) {
-        L.DomEvent.stopPropagation(e);
-        L.DomEvent.preventDefault(e);
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
       }
     }
 
     function onGridDragMove(e) {
       if (!isDraggingGrid || !map || !dragStartMeters || !dragStartCells) return;
-      const latlng = e.latlng;
-      const currentMeters = lngLatToMeters(latlng.lng, latlng.lat);
+      const { lng, lat } = e.lngLat;
+      const currentMeters = lngLatToMeters(lng, lat);
       const dx = currentMeters.x - dragStartMeters.x;
       const dy = currentMeters.y - dragStartMeters.y;
 
@@ -593,8 +888,7 @@
       });
 
       gridCells = newCells;
-      const gridGeoJSON = buildGridGeoJSON(gridCells);
-      ensureGridSourceAndLayer(gridGeoJSON);
+      ensureGridLayer();
     }
 
     function onGridDragEnd() {
@@ -602,200 +896,189 @@
       isDraggingGrid = false;
       dragStartMeters = null;
       dragStartCells = null;
-      if (map && map.dragging && !map.dragging.enabled()) {
-        map.dragging.enable();
+      if (map && map.dragPan) {
+        map.dragPan.enable();
       }
       updateUrlFromState();
     }
 
-    // ========= Map initialization (Leaflet) =========
-    function createMap(pixelRatio) {
-      currentPixelRatio = pixelRatio;
+    // ===== Map initialization =====
+    function createMap() {
+      const initialCenter = [136.03, 35.35]; // [lng,lat]
+      const initialZoom = 11;
 
-      if (map) {
-        map.remove();
-        map = null;
-      }
+      const style = {
+        version: 8,
+        sources: {
+          esri: {
+            type: "raster",
+            tiles: [basemapConfigs.esri.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.esri.maxZoom
+          },
+          gsi1974: {
+            type: "raster",
+            tiles: [basemapConfigs.gsi1974.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.gsi1974.maxZoom
+          },
+          gsiPresent: {
+            type: "raster",
+            tiles: [basemapConfigs.gsiPresent.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.gsiPresent.maxZoom
+          },
+          gsi1961: {
+            type: "raster",
+            tiles: [basemapConfigs.gsi1961.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.gsi1961.maxZoom
+          },
+          gsi1984: {
+            type: "raster",
+            tiles: [basemapConfigs.gsi1984.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.gsi1984.maxZoom
+          },
+          googleSat: {
+            type: "raster",
+            tiles: [basemapConfigs.googleSat.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.googleSat.maxZoom
+          },
+          googleHybrid: {
+            type: "raster",
+            tiles: [basemapConfigs.googleHybrid.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.googleHybrid.maxZoom
+          },
+          googleMaps: {
+            type: "raster",
+            tiles: [basemapConfigs.googleMaps.template],
+            tileSize: 256,
+            maxzoom: basemapConfigs.googleMaps.maxZoom
+          },
+          grid: {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          },
+          overlay: {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          }
+        },
+        layers: [
+          { id: "esri", type: "raster", source: "esri" },
+          {
+            id: "gsi1974",
+            type: "raster",
+            source: "gsi1974",
+            layout: { visibility: "none" }
+          },
+          {
+            id: "gsiPresent",
+            type: "raster",
+            source: "gsiPresent",
+            layout: { visibility: "none" }
+          },
+          {
+            id: "gsi1961",
+            type: "raster",
+            source: "gsi1961",
+            layout: { visibility: "none" }
+          },
+          {
+            id: "gsi1984",
+            type: "raster",
+            source: "gsi1984",
+            layout: { visibility: "none" }
+          },
+          {
+            id: "googleSat",
+            type: "raster",
+            source: "googleSat",
+            layout: { visibility: "none" }
+          },
+          {
+            id: "googleHybrid",
+            type: "raster",
+            source: "googleHybrid",
+            layout: { visibility: "none" }
+          },
+          {
+            id: "googleMaps",
+            type: "raster",
+            source: "googleMaps",
+            layout: { visibility: "none" }
+          },
+          {
+            id: "grid-fill",
+            type: "fill",
+            source: "grid",
+            paint: {
+              "fill-color": "#f97316",
+              "fill-opacity": 0.08
+            }
+          },
+          {
+            id: "grid-line",
+            type: "line",
+            source: "grid",
+            paint: {
+              "line-color": "#ea580c",
+              "line-width": 1.2
+            }
+          },
+          {
+            id: "overlay-line",
+            type: "line",
+            source: "overlay",
+            paint: {
+              "line-color": "#ef4444",
+              "line-width": 2
+            }
+          }
+        ]
+      };
 
-      // Takashima area; Leaflet expects [lat, lng]
-      const initialCenter = [35.35, 136.03];
-
-      map = L.map("map", {
+      map = new maplibregl.Map({
+        container: "map",
+        style,
         center: initialCenter,
-        zoom: 11,
-        zoomSnap: 1,   // integer zooms only
-        zoomDelta: 1,
-        maxZoom: 22
+        zoom: initialZoom
       });
 
-      // Basemap layers (allow zoom up to 22)
-      baseLayers = {
-        esri: L.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 19,
-            attribution:
-              "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-            detectRetina: pixelRatio > 1
-          }
-        ),
-        gsi1974: L.tileLayer(
-          "https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 18,
-            attribution: "&copy; GSI Japan 1974",
-            detectRetina: pixelRatio > 1
-          }
-        ),
-        gsiPresent: L.tileLayer(
-          "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 18,
-            attribution: "&copy; GSI Japan Present",
-            detectRetina: pixelRatio > 1
-          }
-        ),
-        gsi1961: L.tileLayer(
-          "https://cyberjapandata.gsi.go.jp/xyz/ort_old10/{z}/{x}/{y}.png",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 18,
-            attribution: "&copy; GSI Japan 1961",
-            detectRetina: pixelRatio > 1
-          }
-        ),
-        gsi1984: L.tileLayer(
-          "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 18,
-            attribution: "&copy; GSI Japan 1984",
-            detectRetina: pixelRatio > 1
-          }
-        ),
-        googleSat: L.tileLayer(
-          "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 21,
-            attribution: "Imagery © Google",
-            detectRetina: pixelRatio > 1
-          }
-        ),
-        googleHybrid: L.tileLayer(
-          "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 21,
-            attribution: "Imagery © Google",
-            detectRetina: pixelRatio > 1
-          }
-        ),
-        googleMaps: L.tileLayer(
-          "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
-          {
-            tileSize: 256,
-            maxZoom: 22,
-            maxNativeZoom: 21,
-            attribution: "Map data © Google",
-            detectRetina: pixelRatio > 1
-          }
-        )
-      };
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-      currentBaseLayer = baseLayers.esri;
-      currentBaseLayer.addTo(map);
+      map.on("load", () => {
+        map.on("moveend", updateUrlFromState);
+        map.on("zoomend", () => {
+          const zInput = document.getElementById("zoomLevel");
+          if (zInput) {
+            zInput.value = map.getZoom().toFixed(0);
+          }
+          updateUrlFromState();
+        });
 
-      // If a grid already exists, redraw it
-      if (gridCells.length > 0) {
-        const gridGeoJSON = buildGridGeoJSON(gridCells);
-        ensureGridSourceAndLayer(gridGeoJSON);
-      }
-
-      // Map-level handlers for dragging the grid
-      map.on("mousemove", onGridDragMove);
-      map.on("mouseup", onGridDragEnd);
-      map.on("mouseleave", onGridDragEnd);
-
-      // Apply current basemap selection
-      setBasemapVisibility(
-        document.getElementById("basemapSelect").value
-      );
+        map.on("mousedown", onMapMouseDown);
+        map.on("mousemove", onGridDragMove);
+        map.on("mouseup", onGridDragEnd);
+      });
     }
 
-    function setBasemapVisibility(key) {
-      if (!map || !baseLayers[key]) return;
-      if (currentBaseLayer) {
-        map.removeLayer(currentBaseLayer);
-      }
-      currentBaseLayer = baseLayers[key];
-      currentBaseLayer.addTo(map);
+    function setBasemap(key) {
+      if (!map || !basemapConfigs[key]) return;
+      currentBaseKey = key;
+      const ids = Object.keys(basemapConfigs);
+      ids.forEach((id) => {
+        const vis = id === key ? "visible" : "none";
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, "visibility", vis);
+        }
+      });
     }
 
-    // ========= Grid creation from visible extent =========
-    function buildGridGeoJSON(cells) {
-      return {
-        type: "FeatureCollection",
-        features: cells.map((cell) => {
-          const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
-          return {
-            type: "Feature",
-            properties: {
-              row: cell.row,
-              col: cell.col,
-              id: `r${cell.row + 1}_c${cell.col + 1}`
-            },
-            geometry: {
-              type: "Polygon",
-              coordinates: [
-                [
-                  [minLng, minLat],
-                  [maxLng, minLat],
-                  [maxLng, maxLat],
-                  [minLng, maxLat],
-                  [minLng, minLat]
-                ]
-              ]
-            }
-          };
-        })
-      };
-    }
-
-    function ensureGridSourceAndLayer(gridGeoJSON) {
-      if (!map) return;
-
-      if (gridLayer) {
-        gridLayer.clearLayers();
-        gridLayer.addData(gridGeoJSON);
-      } else {
-        gridLayer = L.geoJSON(gridGeoJSON, {
-          style: {
-            color: "#ea580c",
-            weight: 1.2,
-            fillColor: "#f97316",
-            fillOpacity: 0.08
-          }
-        }).addTo(map);
-      }
-
-      // Ensure the grid layer responds to mousedown for dragging
-      if (gridLayer) {
-        gridLayer.off("mousedown", onGridMouseDown);
-        gridLayer.on("mousedown", onGridMouseDown);
-      }
-    }
-
+    // ===== Grid creation =====
     function generateGrid() {
       if (!map) return;
 
@@ -808,74 +1091,46 @@
         parseInt(document.getElementById("cols").value, 10) || 1
       );
 
-      // Apply desired zoom from the zoom box before we read the bounds
-      const zoomInput = document.getElementById("zoomLevel");
-      if (zoomInput) {
-        const desiredZoom = parseFloat(zoomInput.value);
-        if (isFinite(desiredZoom)) {
-          const center = map.getCenter();
-          let maxLayerZoom = map.getMaxZoom();
-          if (
-            currentBaseLayer &&
-            typeof currentBaseLayer.options.maxNativeZoom === "number"
-          ) {
-            maxLayerZoom = currentBaseLayer.options.maxNativeZoom;
-          }
-          const targetZoom = Math.min(desiredZoom, maxLayerZoom);
-          map.setView(center, targetZoom, { animate: false });
-          zoomInput.value = targetZoom.toFixed(0);
-        }
-      }
+      const bounds = map.getBounds();
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
 
-      // Start from current visible map extent
-      const viewBounds = map.getBounds();
-      const viewSw = viewBounds.getSouthWest();
-      const viewNe = viewBounds.getNorthEast();
+      const swM = lngLatToMeters(sw.lng, sw.lat);
+      const neM = lngLatToMeters(ne.lng, ne.lat);
 
-      // Convert visible extent to WebMercator meters
-      const viewSwM = lngLatToMeters(viewSw.lng, viewSw.lat);
-      const viewNeM = lngLatToMeters(viewNe.lng, viewNe.lat);
+      const viewWidth = neM.x - swM.x;
+      const viewHeight = neM.y - swM.y;
 
-      const viewWidth = viewNeM.x - viewSwM.x;
-      const viewHeight = viewNeM.y - viewSwM.y;
-
-      // Default grid extent is the full view
-      let swM = { x: viewSwM.x, y: viewSwM.y };
-      let neM = { x: viewNeM.x, y: viewNeM.y };
+      let swMAdj = { x: swM.x, y: swM.y };
+      let neMAdj = { x: neM.x, y: neM.y };
       let totalW = viewWidth;
       let totalH = viewHeight;
 
-      // Center of the view in meters
-      const centerX = (viewSwM.x + viewNeM.x) / 2;
-      const centerY = (viewSwM.y + viewNeM.y) / 2;
+      const centerX = (swM.x + neM.x) / 2;
+      const centerY = (swM.y + neM.y) / 2;
 
-      // Adjust the grid extent to match A-series aspect ratios when requested.
-      // A-series has aspect ratio sqrt(2) between the long and short side.
-      // We use:
-      //   landscape: width / height = sqrt(2)
-      //   portrait:  width / height = 1 / sqrt(2)
       if (paperMode === "A3" || paperMode === "A4") {
         const longOverShort = Math.SQRT2;
         const targetAR =
           paperOrientation === "landscape"
             ? longOverShort
-            : 1 / longOverShort; // width / height
+            : 1 / longOverShort;
 
-        // Fit the largest rectangle of aspect targetAR inside the current view
-        // Option 1: height-limited
-        let newH = viewHeight;
-        let newW = targetAR * newH;
-        if (newW > viewWidth) {
-          // Option 2: width-limited
-          newW = viewWidth;
-          newH = newW / targetAR;
-        }
-        totalW = newW;
-        totalH = newH;
+        const maxCellHeightByHeight = viewHeight / rows;
+        const maxCellHeightByWidth = viewWidth / (cols * targetAR);
+        const cellHeightMeters = Math.min(
+          maxCellHeightByHeight,
+          maxCellHeightByWidth
+        );
+        const cellWidthMeters = cellHeightMeters * targetAR;
+
+        totalW = cellWidthMeters * cols;
+        totalH = cellHeightMeters * rows;
+
         const halfW = totalW / 2;
         const halfH = totalH / 2;
-        swM = { x: centerX - halfW, y: centerY - halfH };
-        neM = { x: centerX + halfW, y: centerY + halfH };
+        swMAdj = { x: centerX - halfW, y: centerY - halfH };
+        neMAdj = { x: centerX + halfW, y: centerY + halfH };
       }
 
       const cellW = totalW / cols;
@@ -884,9 +1139,9 @@
       const cells = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const minX = swM.x + c * cellW;
+          const minX = swMAdj.x + c * cellW;
           const maxX = minX + cellW;
-          const minY = swM.y + r * cellH;
+          const minY = swMAdj.y + r * cellH;
           const maxY = minY + cellH;
 
           const swLL = metersToLngLat(minX, minY);
@@ -896,22 +1151,15 @@
             [swLL.lng, swLL.lat],
             [neLL.lng, neLL.lat]
           ];
-
-          cells.push({
-            row: r,
-            col: c,
-            bbox
-          });
+          cells.push({ row: r, col: c, bbox });
         }
       }
 
       gridCells = cells;
-      const gridGeoJSON = buildGridGeoJSON(gridCells);
-      ensureGridSourceAndLayer(gridGeoJSON);
+      ensureGridLayer();
 
-      // Approximate overall grid and cell size in km for feedback
-      const gridSwLL = metersToLngLat(swM.x, swM.y);
-      const gridNeLL = metersToLngLat(neM.x, neM.y);
+      const gridSwLL = metersToLngLat(swMAdj.x, swMAdj.y);
+      const gridNeLL = metersToLngLat(neMAdj.x, neMAdj.y);
       const centerLat = (gridSwLL.lat + gridNeLL.lat) / 2;
       const metersPerDegLat = (2 * Math.PI * R) / 360;
       const metersPerDegLng =
@@ -930,6 +1178,7 @@
           : NaN;
 
       const zoomNow = map.getZoom();
+      gridZoomForExport = zoomNow;
 
       const dimsText = `現在のグリッド: ズーム ${zoomNow.toFixed(
         0
@@ -948,10 +1197,7 @@
       }).`;
 
       setGridDimensionsText(dimsText);
-
-      setStatus(
-        `グリッドを作成しました: ${rows} × ${cols}。${dimsText}`
-      );
+      setStatus(`グリッドを作成しました: ${rows} × ${cols}。${dimsText}`);
 
       const zoomInputEl = document.getElementById("zoomLevel");
       if (zoomInputEl) {
@@ -961,12 +1207,12 @@
       updateUrlFromState();
     }
 
-    // ========= Search =========
+    // ===== Search =====
     function searchLocation() {
       if (!map) return;
       const q = document.getElementById("searchInput").value.trim();
       if (!q) return;
-      setStatus('「' + q + '」を検索中です...');
+      setStatus(`「${q}」を検索中です…`);
       fetch(
         "https://nominatim.openstreetmap.org/search?format=json&q=" +
           encodeURIComponent(q)
@@ -974,13 +1220,13 @@
         .then((res) => res.json())
         .then((data) => {
           if (!data || !data.length) {
-            setStatus('「' + q + '」は見つかりませんでした。');
+            setStatus(`「${q}」は見つかりませんでした。`);
             return;
           }
           const best = data[0];
           const lat = parseFloat(best.lat);
           const lon = parseFloat(best.lon);
-          map.flyTo([lat, lon], 12);
+          map.flyTo({ center: [lon, lat], zoom: 12 });
           setStatus("場所を移動しました: " + best.display_name);
         })
         .catch((err) => {
@@ -989,93 +1235,157 @@
         });
     }
 
-    // ========= Export current view (PNG) =========
+    // ===== GeoJSON overlay =====
+    function loadGeoJSONFromUrl() {
+      if (!map) return;
+      const input = document.getElementById("geojsonUrl");
+      if (!input) return;
+      const url = input.value.trim();
+      if (!url) {
+        setStatus("GeoJSON の URL を入力してください。");
+        return;
+      }
+      setStatus("GeoJSON を読み込み中です...");
+      fetch(url)
+        .then((res) => {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        })
+        .then((data) => {
+          const src = map.getSource("overlay");
+          if (src && src.setData) {
+            src.setData(data);
+          }
+          // Simple fit bounds
+          try {
+            let minLng = Infinity, minLat = Infinity;
+            let maxLng = -Infinity, maxLat = -Infinity;
+            const walk = (geom) => {
+              if (!geom) return;
+              const type = geom.type;
+              if (type === "Point") {
+                const [lng, lat] = geom.coordinates;
+                if (lng < minLng) minLng = lng;
+                if (lat < minLat) minLat = lat;
+                if (lng > maxLng) maxLng = lng;
+                if (lat > maxLat) maxLat = lat;
+              } else if (type === "LineString" || type === "MultiPoint") {
+                geom.coordinates.forEach(([lng, lat]) => {
+                  if (lng < minLng) minLng = lng;
+                  if (lat < minLat) minLat = lat;
+                  if (lng > maxLng) maxLng = lng;
+                  if (lat > maxLat) maxLat = lat;
+                });
+              } else if (type === "Polygon" || type === "MultiLineString") {
+                geom.coordinates.forEach((ring) =>
+                  ring.forEach(([lng, lat]) => {
+                    if (lng < minLng) minLng = lng;
+                    if (lat < minLat) minLat = lat;
+                    if (lng > maxLng) maxLng = lng;
+                    if (lat > maxLat) maxLat = lat;
+                  })
+                );
+              } else if (type === "MultiPolygon") {
+                geom.coordinates.forEach((poly) =>
+                  poly.forEach((ring) =>
+                    ring.forEach(([lng, lat]) => {
+                      if (lng < minLng) minLng = lng;
+                      if (lat < minLat) minLat = lat;
+                      if (lng > maxLng) maxLng = lng;
+                      if (lat > maxLat) maxLat = lat;
+                    })
+                  )
+                );
+              } else if (type === "GeometryCollection") {
+                geom.geometries.forEach(walk);
+              }
+            };
+
+            if (data.type === "FeatureCollection") {
+              data.features.forEach((f) => walk(f.geometry));
+            } else if (data.type === "Feature") {
+              walk(data.geometry);
+            } else {
+              walk(data);
+            }
+
+            if (
+              isFinite(minLng) && isFinite(minLat) &&
+              isFinite(maxLng) && isFinite(maxLat)
+            ) {
+              map.fitBounds(
+                [
+                  [minLng, minLat],
+                  [maxLng, maxLat]
+                ],
+                { padding: 20, duration: 800 }
+              );
+            }
+          } catch (e) {
+            console.warn("Could not fit bounds for GeoJSON overlay:", e);
+          }
+          setStatus("GeoJSON レイヤーを読み込みました。");
+        })
+        .catch((err) => {
+          console.error(err);
+          setStatus("GeoJSON の読み込みに失敗しました。CORS や URL を確認してください。");
+        });
+    }
+
+    function clearGeoJSONOverlay() {
+      if (!map) return;
+      const src = map.getSource("overlay");
+      if (src && src.setData) {
+        src.setData({ type: "FeatureCollection", features: [] });
+      }
+      setStatus("GeoJSON レイヤーをクリアしました。");
+    }
+
+    // ===== Export current view (PNG) via MapLibre canvas =====
     function exportCurrentView() {
       if (!map) return;
       const showBoundariesEl = document.getElementById("showBoundaries");
-      const showBoundaries =
-        !showBoundariesEl || showBoundariesEl.checked;
+      const showBoundaries = !showBoundariesEl || showBoundariesEl.checked;
 
-      const mapDiv = document.getElementById("map");
-      if (!mapDiv) {
-        setStatus("エクスポートに失敗しました（マップ要素なし）。");
-        return;
+      const hideGrid = !showBoundaries;
+      if (hideGrid && map.getLayer("grid-line") && map.getLayer("grid-fill")) {
+        map.setLayoutProperty("grid-line", "visibility", "none");
+        map.setLayoutProperty("grid-fill", "visibility", "none");
       }
-
-      // Temporarily hide grid if boundaries are disabled for export
-      let removedGrid = false;
-      if (!showBoundaries && gridLayer && map.hasLayer(gridLayer)) {
-        map.removeLayer(gridLayer);
-        removedGrid = true;
-      }
-
-      const originalWidth = mapDiv.style.width;
-      const originalHeight = mapDiv.style.height;
-      const originalSize = map.getSize();
-      const aspect =
-        originalSize.x > 0 && originalSize.y > 0
-          ? originalSize.x / originalSize.y
-          : 1;
-
-      const base = getExportBaseSize();
-      let targetW, targetH;
-      if (aspect >= 1) {
-        targetW = base;
-        targetH = Math.round(base / aspect);
-      } else {
-        targetH = base;
-        targetW = Math.round(base * aspect);
-      }
-
-      mapDiv.style.width = targetW + "px";
-      mapDiv.style.height = targetH + "px";
-      map.invalidateSize();
 
       try {
-        leafletImage(map, (err, canvas) => {
-          // Restore map size
-          mapDiv.style.width = originalWidth;
-          mapDiv.style.height = originalHeight;
-          map.invalidateSize();
-
-          // Restore grid layer after capture
-          if (removedGrid && gridLayer && !map.hasLayer(gridLayer)) {
-            gridLayer.addTo(map);
-          }
-
-          if (err) {
-            console.error(err);
-            setStatus("エクスポートに失敗しました（描画エラー）。");
-            return;
-          }
-          const dataURL = canvas.toDataURL("image/png");
-          const link = document.createElement("a");
-          const ts = new Date().toISOString().replace(/[:.]/g, "-");
-          link.href = dataURL;
-          link.download = `map_view_${ts}.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setStatus("現在の表示を PNG として保存しました。");
-        });
+        const canvas = map.getCanvas();
+        const dataURL = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        link.href = dataURL;
+        link.download = `map_view_${ts}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setStatus("現在の表示を PNG として保存しました。");
       } catch (e) {
         console.error(e);
         setStatus("エクスポートに失敗しました（ブラウザの権限を確認してください）。");
-        // Restore size and grid on error
-        mapDiv.style.width = originalWidth;
-        mapDiv.style.height = originalHeight;
-        map.invalidateSize();
-        if (removedGrid && gridLayer && !map.hasLayer(gridLayer)) {
-          gridLayer.addTo(map);
+      } finally {
+        if (hideGrid && map.getLayer("grid-line") && map.getLayer("grid-fill")) {
+          map.setLayoutProperty("grid-line", "visibility", "visible");
+          map.setLayoutProperty("grid-fill", "visibility", "visible");
         }
       }
     }
 
-    // ========= Export all cells to single PDF =========
-    function exportAllCells() {
+    // ===== Export all cells to one PDF (tile-based, native resolution) =====
+    async function exportAllCells() {
       if (!map) return;
       if (!gridCells.length) {
         alert("先にグリッドを作成してください。");
+        return;
+      }
+
+      const tileTemplate = getTileTemplate();
+      if (!tileTemplate) {
+        setStatus("現在のベースマップはタイルエクスポートに対応していません。別のベースマップを試してください。");
         return;
       }
 
@@ -1089,168 +1399,70 @@
       const { jsPDF } = window.jspdf;
       let pdf = null;
 
-      let index = 0;
       const total = gridCells.length;
+      exportTotalCells = total;
+      let totalTilesSoFar = 0;
 
       const showBoundariesEl = document.getElementById("showBoundaries");
-      const showBoundaries =
-        !showBoundariesEl || showBoundariesEl.checked;
-
-      // If boundaries should not appear in export, temporarily hide the grid layer.
-      let removedGridForExport = false;
-      if (!showBoundaries && gridLayer && map.hasLayer(gridLayer)) {
-        map.removeLayer(gridLayer);
-        removedGridForExport = true;
-      }
+      const showBoundaries = !showBoundariesEl || showBoundariesEl.checked;
 
       setStatus(`セル 1 / ${total} を出力中...`);
-      setExportOverlay(`セル 1 / ${total} を出力中...`);
+      setExportOverlay(`セル 1 / ${total} を出力中...`, "", 0);
 
-      function finalizeExport(options) {
-        const { save, message } = options;
+      function finalizeExport({ save, message }) {
         if (save && pdf) {
           pdf.save("map_grid.pdf");
         }
+        exportTotalCells = 0;
         exportBtn.disabled = false;
         exportOneBtn.disabled = false;
         setStatus(message);
         setExportOverlay("");
-        if (removedGridForExport && gridLayer && !map.hasLayer(gridLayer)) {
-          gridLayer.addTo(map);
-        }
       }
 
-      function processNext() {
-        if (exportCancelRequested) {
-          finalizeExport({ save: false, message: "エクスポートをキャンセルしました。" });
-          return;
-        }
-        const cell = gridCells[index];
-        const [[minLng, minLat], [maxLng, maxLat]] = cell.bbox;
-
-        const bounds = L.latLngBounds(
-          L.latLng(minLat, minLng),
-          L.latLng(maxLat, maxLng)
-        );
-        const cellCenter = bounds.getCenter();
-
-        const mapDiv = document.getElementById("map");
-        if (!mapDiv) {
-          console.error("Map container not found for export.");
-          afterCapture();
-          return;
-        }
-
-        const originalWidth = mapDiv.style.width;
-        const originalHeight = mapDiv.style.height;
-        const originalSize = map.getSize();
-        const aspect =
-          originalSize.x > 0 && originalSize.y > 0
-            ? originalSize.x / originalSize.y
-            : 1;
-
-        const base = getExportBaseSize();
-        let targetW, targetH;
-        if (aspect >= 1) {
-          targetW = base;
-          targetH = Math.round(base / aspect);
-        } else {
-          targetH = base;
-          targetW = Math.round(base * aspect);
-        }
-
-        // Resize map to export resolution
-        mapDiv.style.width = targetW + "px";
-        mapDiv.style.height = targetH + "px";
-        map.invalidateSize();
-
-        // After resizing, recompute zoom so the cell fits in the resized map
-        let targetZoom = map.getBoundsZoom(bounds, false);
-        let maxLayerZoom = map.getMaxZoom();
-        if (
-          currentBaseLayer &&
-          typeof currentBaseLayer.options.maxNativeZoom === "number"
-        ) {
-          maxLayerZoom = currentBaseLayer.options.maxNativeZoom;
-        }
-        const clampedZoom = Math.min(targetZoom, maxLayerZoom);
-        map.setView(cellCenter, clampedZoom, { animate: false });
-
-        leafletImage(map, (err, canvas) => {
-          // Map size in CSS pixels and canvas size in actual pixels (before restoring DOM size)
-          const mapSize = map.getSize();
-
-          if (err) {
-            console.error(err);
-            // Restore map size before moving on
-            mapDiv.style.width = originalWidth;
-            mapDiv.style.height = originalHeight;
-            map.invalidateSize();
-            afterCapture();
-            return;
-          }
-
+      try {
+        for (let index = 0; index < total; index++) {
           if (exportCancelRequested) {
-            // Restore map size before finalizing
-            mapDiv.style.width = originalWidth;
-            mapDiv.style.height = originalHeight;
-            map.invalidateSize();
-            finalizeExport({ save: false, message: "エクスポートをキャンセルしました。" });
+            finalizeExport({
+              save: false,
+              message: "エクスポートをキャンセルしました。"
+            });
             return;
           }
 
-          const scaleX = canvas.width / mapSize.x;
-          const scaleY = canvas.height / mapSize.y;
+          const cell = gridCells[index];
+          const stepText = `セル ${index + 1} / ${total} を出力中...`;
+          setStatus(stepText);
 
-          // Compute the pixel rectangle corresponding exactly to the cell bounds
-          const swLatLng = L.latLng(minLat, minLng);
-          const neLatLng = L.latLng(maxLat, maxLng);
-          const swPt = map.latLngToContainerPoint(swLatLng); // bottom-left
-          const nePt = map.latLngToContainerPoint(neLatLng); // top-right
+          const {
+            canvas: cropCanvas,
+            width: cropW,
+            height: cropH,
+            tileCount
+          } = await renderCellViaTiles(cell, tileTemplate);
 
-          // Convert to canvas pixel coordinates (unclamped)
-          let x0 = swPt.x * scaleX;
-          let y0 = nePt.y * scaleY;
-          let x1 = nePt.x * scaleX;
-          let y1 = swPt.y * scaleY;
+          totalTilesSoFar += (tileCount || 0);
+          const detailText = `このセル: 約 ${tileCount || 0} タイル / 累計: 約 ${totalTilesSoFar} タイル`;
+          const progress = total > 0 ? (index + 1) / total : 0;
+          setExportOverlay(stepText, detailText, progress);
 
-          // Clamp to canvas bounds to avoid overshoot
-          x0 = Math.max(0, Math.min(canvas.width, x0));
-          x1 = Math.max(0, Math.min(canvas.width, x1));
-          y0 = Math.max(0, Math.min(canvas.height, y0));
-          y1 = Math.max(0, Math.min(canvas.height, y1));
-
-          const sx = Math.round(Math.min(x0, x1));
-          const sy = Math.round(Math.min(y0, y1));
-          const ex = Math.round(Math.max(x0, x1));
-          const ey = Math.round(Math.max(y0, y1));
-
-          const cropW = Math.max(1, ex - sx);
-          const cropH = Math.max(1, ey - sy);
-
-          // Create a cropped canvas matching exactly the grid cell
-          const cropCanvas = document.createElement("canvas");
-          cropCanvas.width = cropW;
-          cropCanvas.height = cropH;
-          const ctx = cropCanvas.getContext("2d");
-
-          ctx.drawImage(
-            canvas,
-            sx,
-            sy,
-            cropW,
-            cropH,
-            0,
-            0,
-            cropW,
-            cropH
-          );
+          if (showBoundaries) {
+            const bctx = cropCanvas.getContext("2d");
+            const lw = Math.max(1, Math.round(Math.min(cropW, cropH) / 400));
+            bctx.strokeStyle = "rgba(234,88,12,0.9)";
+            bctx.lineWidth = lw;
+            bctx.strokeRect(
+              lw / 2,
+              lw / 2,
+              cropW - lw,
+              cropH - lw
+            );
+          }
 
           const dataURL = cropCanvas.toDataURL("image/png");
 
           if (!pdf) {
-            const orientation =
-              cropW >= cropH ? "landscape" : "portrait";
+            const orientation = cropW >= cropH ? "landscape" : "portrait";
             pdf = new jsPDF({
               orientation,
               unit: "px",
@@ -1266,54 +1478,32 @@
           const pageWidth = pdf.internal.pageSize.getWidth();
           const pageHeight = pdf.internal.pageSize.getHeight();
           pdf.addImage(dataURL, "PNG", 0, 0, pageWidth, pageHeight);
+        }
 
-          // Restore map size after successful capture
-          mapDiv.style.width = originalWidth;
-          mapDiv.style.height = originalHeight;
-          map.invalidateSize();
-
-          afterCapture();
+        finalizeExport({
+          save: true,
+          message: `エクスポート完了: ${total} セルを PDF に保存しました。`
+        });
+      } catch (e) {
+        console.error(e);
+        finalizeExport({
+          save: !!pdf,
+          message: "タイルエクスポート中にエラーが発生しました。"
         });
       }
-
-      function afterCapture() {
-        index++;
-        if (index >= total) {
-          if (exportCancelRequested) {
-            finalizeExport({
-              save: false,
-              message: "エクスポートをキャンセルしました。"
-            });
-          } else {
-            finalizeExport({
-              save: true,
-              message: `エクスポート完了: ${total} セルを PDF に保存しました。`
-            });
-          }
-          return;
-        }
-        const stepText = `セル ${index + 1} / ${total} を出力中...`;
-        setStatus(stepText);
-        setExportOverlay(stepText);
-        setTimeout(processNext, 200);
-      }
-
-      processNext();
     }
 
-    // ========= Wiring & URL restoration =========
+    // ===== DOMContentLoaded wiring =====
     window.addEventListener("DOMContentLoaded", () => {
       const params = new URLSearchParams(window.location.search);
 
-      // fixed pixel ratio 2
-      createMap(2);
+      createMap();
 
       const zoomInputEl = document.getElementById("zoomLevel");
       if (zoomInputEl && map) {
         zoomInputEl.value = map.getZoom().toFixed(0);
       }
 
-      // Lock grid checkbox wiring
       const lockEl = document.getElementById("lockGrid");
       if (lockEl) {
         if (params.has("lock")) {
@@ -1336,17 +1526,15 @@
         });
       }
 
-      // Restore basemap
       const basemapSelect = document.getElementById("basemapSelect");
       if (basemapSelect && params.has("basemap")) {
         const key = params.get("basemap");
-        if (key && baseLayers[key]) {
+        if (key && basemapConfigs[key]) {
           basemapSelect.value = key;
-          setBasemapVisibility(key);
+          setBasemap(key);
         }
       }
 
-      // Restore map center/zoom if present
       if (params.has("lat") && params.has("lng")) {
         const lat = parseFloat(params.get("lat"));
         const lng = parseFloat(params.get("lng"));
@@ -1356,23 +1544,18 @@
             const zParam = parseFloat(params.get("zoom"));
             if (isFinite(zParam)) zoom = zParam;
           }
-          map.setView([lat, lng], zoom, { animate: false });
-          if (zoomInputEl) {
-            zoomInputEl.value = zoom.toFixed(0);
-          }
+          map.jumpTo({ center: [lng, lat], zoom });
+          if (zoomInputEl) zoomInputEl.value = zoom.toFixed(0);
         }
       } else if (params.has("zoom")) {
         const zParam = parseFloat(params.get("zoom"));
         if (isFinite(zParam)) {
-          const center = map.getCenter();
-          map.setView(center, zParam, { animate: false });
-          if (zoomInputEl) {
-            zoomInputEl.value = zParam.toFixed(0);
-          }
+          const c = map.getCenter();
+          map.jumpTo({ center: [c.lng, c.lat], zoom: zParam });
+          if (zoomInputEl) zoomInputEl.value = zParam.toFixed(0);
         }
       }
 
-      // Restore grid form values
       const rowsInput = document.getElementById("rows");
       const colsInput = document.getElementById("cols");
       if (rowsInput && params.has("rows")) {
@@ -1383,17 +1566,18 @@
       }
       if (zoomInputEl && params.has("gridZoom")) {
         zoomInputEl.value = params.get("gridZoom");
+        const gz = parseFloat(params.get("gridZoom"));
+        if (isFinite(gz)) {
+          gridZoomForExport = gz;
+        }
       }
 
-      // Restore paper mode
       if (params.has("paper")) {
         const p = params.get("paper");
         if (p === "A3" || p === "A4" || p === "custom") {
           paperMode = p;
         }
       }
-
-      // Restore orientation
       if (params.has("orient")) {
         const o = params.get("orient");
         if (o === "landscape" || o === "portrait") {
@@ -1401,7 +1585,7 @@
         }
       }
 
-      // Restore grid from bounds if present
+      // Restore grid from URL if present
       if (
         params.has("rows") &&
         params.has("cols") &&
@@ -1418,10 +1602,8 @@
         const neLat = parseFloat(params.get("gneLat"));
 
         if (
-          isFinite(swLng) &&
-          isFinite(swLat) &&
-          isFinite(neLng) &&
-          isFinite(neLat)
+          isFinite(swLng) && isFinite(swLat) &&
+          isFinite(neLng) && isFinite(neLat)
         ) {
           const swM = lngLatToMeters(swLng, swLat);
           const neM = lngLatToMeters(neLng, neLat);
@@ -1445,20 +1627,13 @@
                 [swLL.lng, swLL.lat],
                 [neLL.lng, neLL.lat]
               ];
-
-              cells.push({
-                row: r,
-                col: c,
-                bbox
-              });
+              cells.push({ row: r, col: c, bbox });
             }
           }
 
           gridCells = cells;
-          const gridGeoJSON = buildGridGeoJSON(gridCells);
-          ensureGridSourceAndLayer(gridGeoJSON);
+          ensureGridLayer();
 
-          // Compute metrics for display
           const gridSwLL = { lng: swLng, lat: swLat };
           const gridNeLL = { lng: neLng, lat: neLat };
           const centerLat = (gridSwLL.lat + gridNeLL.lat) / 2;
@@ -1479,6 +1654,8 @@
               : NaN;
 
           const zoomNow = map.getZoom();
+          gridZoomForExport = zoomNow;
+
           const dimsText = `現在のグリッド: ズーム ${zoomNow.toFixed(
             0
           )}, 全体 ≈ ${gridWidthKmApprox.toFixed(
@@ -1498,26 +1675,20 @@
           setGridDimensionsText(dimsText);
           setStatus(`URL からグリッドを復元しました。${dimsText}`);
 
-          // Fit map to grid if no explicit lat/lng
           if (!(params.has("lat") && params.has("lng"))) {
-            const gridBounds = L.latLngBounds(
-              L.latLng(swLat, swLng),
-              L.latLng(neLat, neLng)
+            map.fitBounds(
+              [
+                [swLng, swLat],
+                [neLng, neLat]
+              ],
+              { padding: 20, duration: 0 }
             );
-            map.fitBounds(gridBounds, { animate: false });
           }
         }
       }
 
-      // Wire buttons and controls
-      document
-        .getElementById("generateGridBtn")
-        .addEventListener("click", generateGrid);
-
-      // Paper mode buttons (A3 / A4 / Custom)
-      const paperButtons = Array.from(
-        document.querySelectorAll(".paper-btn")
-      );
+      // Paper preset buttons
+      const paperButtons = Array.from(document.querySelectorAll(".paper-btn"));
       function updatePaperButtons() {
         paperButtons.forEach((btn) => {
           const mode = btn.getAttribute("data-paper");
@@ -1540,13 +1711,10 @@
           updateUrlFromState();
         });
       });
-      // Initialize default mode (A3 or from URL)
       updatePaperButtons();
 
-      // Orientation buttons (landscape / portrait)
-      const orientButtons = Array.from(
-        document.querySelectorAll(".orient-btn")
-      );
+      // Orientation buttons
+      const orientButtons = Array.from(document.querySelectorAll(".orient-btn"));
       function updateOrientButtons() {
         orientButtons.forEach((btn) => {
           const o = btn.getAttribute("data-orient");
@@ -1573,13 +1741,17 @@
           }
         });
       });
-      // Initialize orientation buttons from current state or URL
       updateOrientButtons();
+
+      // Buttons / controls
+      document
+        .getElementById("generateGridBtn")
+        .addEventListener("click", generateGrid);
 
       document
         .getElementById("basemapSelect")
         .addEventListener("change", (e) => {
-          setBasemapVisibility(e.target.value);
+          setBasemap(e.target.value);
           updateUrlFromState();
         });
 
@@ -1615,7 +1787,12 @@
         exportResSelect.value = exportResolutionMode;
         exportResSelect.addEventListener("change", (e) => {
           const val = e.target.value;
-          if (val === "low" || val === "medium" || val === "high" || val === "veryHigh") {
+          if (
+            val === "low" ||
+            val === "medium" ||
+            val === "high" ||
+            val === "veryHigh"
+          ) {
             exportResolutionMode = val;
           } else {
             exportResolutionMode = "high";
@@ -1633,23 +1810,8 @@
         });
       }
 
-      // Keep URL in sync on move/zoom
-      map.on("moveend", updateUrlFromState);
-      map.on("zoomend", () => {
-        const zInput = document.getElementById("zoomLevel");
-        if (zInput) {
-          zInput.value = map.getZoom().toFixed(0);
-        }
-        updateUrlFromState();
-      });
-
-      // Initial sync
       updateUrlFromState();
     });
   </script>
-  <div id="exportOverlay">
-    <div id="exportOverlayText"></div>
-    <button id="cancelExportBtn" type="button">キャンセル</button>
-  </div>
 </body>
 </html>
