@@ -1,432 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <title>Map Grid Printer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- MapLibre -->
-  <link
-    href="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css"
-    rel="stylesheet"
-  />
-  <script src="https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.js"></script>
-
-  <!-- jsPDF for PDF export -->
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    html, body {
-      width: 100%;
-      height: 100%;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
-      color: #111827;
-    }
-    body {
-      display: flex;
-      overflow: hidden;
-    }
-
-    /* Side panel */
-    #sidebar {
-      width: 340px;
-      min-width: 320px;
-      max-width: 380px;
-      padding: 16px 16px 24px;
-      border-right: 1px solid #d1d5db;
-      background: #f9fafb;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      overflow-y: auto;
-    }
-    #sidebar h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    #sidebar h2 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-top: 4px;
-      margin-bottom: 4px;
-    }
-    .section {
-      padding: 10px 12px;
-      background: #ffffff;
-      border-radius: 8px;
-      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
-    }
-
-    .field-group {
-      display: grid;
-      grid-template-columns: 1.2fr 1.1fr;
-      gap: 6px 8px;
-      align-items: center;
-      font-size: 0.85rem;
-      margin-top: 4px;
-    }
-    .field-group.single-col {
-      grid-template-columns: 1fr;
-    }
-    .field-group.single-col label,
-    .field-group.single-col input,
-    .field-group.single-col select {
-      grid-column: 1 / -1;
-    }
-    .field-group label {
-      color: #374151;
-    }
-    .field-group input,
-    .field-group select {
-      width: 100%;
-      padding: 4px 6px;
-      border-radius: 4px;
-      border: 1px solid #cbd5e1;
-      font-size: 0.85rem;
-    }
-
-    .inline-fields {
-      display: flex;
-      gap: 8px;
-      margin-top: 4px;
-    }
-    .inline-fields > div {
-      flex: 1;
-    }
-    .inline-fields input {
-      width: 100%;
-      padding: 4px 6px;
-      border-radius: 4px;
-      border: 1px solid #cbd5e1;
-      font-size: 0.85rem;
-    }
-
-    .inline-triplet {
-      display: flex;
-      gap: 8px;
-      margin-top: 4px;
-      align-items: flex-start;
-    }
-    .inline-triplet .field-block {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .inline-triplet .field-block.narrow {
-      flex: 0 0 70px;
-    }
-    .inline-triplet label {
-      color: #374151;
-      font-size: 0.82rem;
-    }
-    #rows,
-    #cols {
-      width: 60px;
-      min-width: 0;
-    }
-
-    .paper-inline {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-    .paper-inline .mini-label {
-      font-size: 0.82rem;
-      color: #374151;
-      font-weight: 600;
-      margin-right: 4px;
-    }
-    .paper-inline .paper-btn,
-    .paper-inline .orient-btn {
-      margin-right: 4px;
-    }
-
-    .button-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    button {
-      padding: 6px 10px;
-      border-radius: 6px;
-      border: 1px solid #0f766e;
-      background: #0d9488;
-      color: #ffffff;
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: background 0.12s ease, transform 0.05s ease;
-    }
-    button.secondary {
-      border-color: #4b5563;
-      background: #ffffff;
-      color: #111827;
-    }
-    button:disabled {
-      background: #9ca3af;
-      border-color: #9ca3af;
-      cursor: default;
-    }
-    button:hover:not(:disabled) {
-      background: #0f766e;
-      transform: translateY(-0.5px);
-    }
-    button.secondary:hover:not(:disabled) {
-      background: #f3f4f6;
-    }
-
-    /* Paper preset / orientation buttons: smaller and grayscale */
-    .paper-btn,
-    .orient-btn {
-      padding: 3px 8px;
-      font-size: 0.75rem;
-      border-color: #9ca3af;
-      background: #e5e7eb;
-      color: #374151;
-    }
-    .paper-btn.paper-active {
-      background: #4b5563;
-      border-color: #4b5563;
-      color: #f9fafb;
-    }
-    .orient-btn.orient-active {
-      background: #4b5563;
-      border-color: #4b5563;
-      color: #f9fafb;
-    }
-
-    .small-note {
-      margin-top: 6px;
-      font-size: 0.75rem;
-      color: #6b7280;
-    }
-
-    .status {
-      margin-top: 8px;
-      font-size: 0.78rem;
-      color: #4b5563;
-      min-height: 1.2em;
-    }
-
-    #map {
-      flex: 1;
-      height: 100%;
-    }
-
-    /* MapLibre map canvas */
-    .maplibregl-map {
-      font: inherit;
-    }
-
-    /* Export overlay */
-    #exportOverlay {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 1000;
-      background: rgba(15, 23, 42, 0.92);
-      color: #f9fafb;
-      padding: 18px 22px;
-      border-radius: 12px;
-      font-size: 0.95rem;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 12px;
-      pointer-events: auto;
-      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
-    }
-    #exportOverlayText {
-      font-size: 0.95rem;
-    }
-    #cancelExportBtn {
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid #f97316;
-      background: #f97316;
-      color: #111827;
-      font-size: 0.8rem;
-      cursor: pointer;
-    }
-    #cancelExportBtn:hover {
-      background: #fb923c;
-      border-color: #fb923c;
-    }
-    #exportOverlayDetail {
-      font-size: 0.8rem;
-      color: #e5e7eb;
-      margin-top: 4px;
-      text-align: center;
-    }
-    #exportProgressBar {
-      width: 100%;
-      height: 6px;
-      background: rgba(148, 163, 184, 0.4);
-      border-radius: 999px;
-      overflow: hidden;
-      margin-top: 8px;
-      display: none;
-    }
-    #exportProgressBarInner {
-      width: 0%;
-      height: 100%;
-      background: #f97316;
-      transition: width 0.15s ease-out;
-    }
-
-    #basemapSelect {
-      width: 100%;
-      min-width: 0;
-    }
-    #geojsonUrl {
-      width: 100%;
-    }
-    #exportRes {
-      width: 100%;
-    }
-  </style>
-</head>
-<body>
-  <div id="sidebar">
-    <h1>Map Grid Printer</h1>
-
-    <!-- Search -->
-    <div class="section">
-      <h2>Search</h2>
-      <div class="inline-fields">
-        <div style="flex: 1.7;">
-          <input id="searchInput" type="text" placeholder="地名または住所" />
-        </div>
-        <div style="flex: 0.9; display: flex; align-items: flex-end;">
-          <button id="searchBtn" style="width: 100%;">検索</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Grid settings -->
-    <div class="section">
-      <h2>Grid settings</h2>
-      <div class="inline-triplet">
-        <div class="field-block narrow">
-          <label for="rows">Rows</label>
-          <input id="rows" type="number" min="1" value="5" />
-        </div>
-        <div class="field-block narrow">
-          <label for="cols">Columns</label>
-          <input id="cols" type="number" min="1" value="5" />
-        </div>
-        <div class="field-block">
-          <label for="zoomLevel">Zoom</label>
-          <input id="zoomLevel" type="number" step="1" min="1" max="22" value="11" />
-        </div>
-      </div>
-
-      <div class="paper-inline">
-        <button type="button" class="secondary paper-btn" data-paper="A3">A3</button>
-        <button type="button" class="secondary paper-btn" data-paper="A4">A4</button>
-        <button type="button" class="secondary paper-btn" data-paper="custom">Custom</button>
-        <button type="button" class="secondary orient-btn" data-orient="landscape">横</button>
-        <button type="button" class="secondary orient-btn" data-orient="portrait">縦</button>
-      </div>
-
-      <div class="button-row">
-        <button id="generateGridBtn">グリッド作成 / 更新</button>
-      </div>
-
-      <div class="small-note" style="margin-top: 4px;">
-        <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
-          <input id="lockGrid" type="checkbox" checked />
-          <span>グリッドを固定</span>
-        </label>
-      </div>
-
-      <p class="small-note" id="gridDims"></p>
-    </div>
-
-    <!-- Basemap -->
-    <div class="section">
-      <h2>Basemap</h2>
-      <div class="field-group single-col">
-        <select id="basemapSelect">
-          <option value="esri">ESRI World Imagery</option>
-          <option value="gsi1974">GSI 1974</option>
-          <option value="gsiPresent">GSI Present</option>
-          <option value="gsi1961">GSI 1961</option>
-          <option value="gsi1984">GSI 1984</option>
-          <option value="googleSat">Google Satellite</option>
-          <option value="googleHybrid">Google Hybrid</option>
-          <option value="googleMaps">Google Maps</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- GeoJSON overlay -->
-    <div class="section">
-      <h2>GeoJSON</h2>
-      <div class="field-group single-col">
-        <label for="geojsonUrl">URL</label>
-        <input
-          id="geojsonUrl"
-          type="text"
-          placeholder="https://raw.githubusercontent.com/yohman/grids/refs/heads/main/takashima.geojson"
-        />
-      </div>
-      <div class="small-note">
-        ex: <a id="takashimaLink" href="takashima.geojson" target="_blank">Takashima</a>
-      </div>
-      <div class="button-row">
-        <button id="loadGeojsonBtn" class="secondary">読み込み</button>
-        <button id="clearGeojsonBtn" class="secondary">クリア</button>
-      </div>
-    </div>
-
-    <!-- Export -->
-    <div class="section">
-      <h2>Export</h2>
-      <div class="small-note" style="margin-top: 4px;">
-        <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
-          <input id="showBoundaries" type="checkbox" checked />
-          <span>出力画像にグリッド線を表示</span>
-        </label>
-      </div>
-      <div class="button-row">
-        <button id="exportBtn">全セルをPDF出力</button>
-        <button class="secondary" id="exportOneBtn">現在表示をPNG保存</button>
-        <button class="secondary" id="printIndexBtn">インデックスを印刷</button>
-      </div>
-      <div class="field-group single-col" style="margin-top: 4px;">
-        <select id="exportRes"></select>
-      </div>
-      <div class="status" id="statusText"></div>
-    </div>
-  </div>
-
-  <div id="map"></div>
-
-  <!-- Export overlay (centered) -->
-  <div id="exportOverlay">
-    <div id="exportOverlayText"></div>
-    <div id="exportOverlayDetail"></div>
-    <div id="exportProgressBar">
-      <div id="exportProgressBarInner"></div>
-    </div>
-    <button id="cancelExportBtn" type="button">キャンセル</button>
-  </div>
-
-  <script>
     // ===== Constants and globals =====
     const R = 6378137; // WebMercator radius
     const TILE_SIZE = 256;
@@ -881,14 +453,6 @@
         const match = candidates.find((c) => c.z === tileZoomOverride);
         if (match) {
           selectedId = match.id;
-        }
-      } else {
-        const bump1 = candidates.find((c) => c.id === "bump1");
-        if (bump1) {
-          selectedId = "bump1";
-          tileZoomOverride = bump1.z;
-        } else {
-          tileZoomOverride = null;
         }
       }
       select.value = selectedId;
@@ -1700,11 +1264,6 @@
         return;
       }
 
-      if (!map.isStyleLoaded()) {
-        setStatus("地図が読み込み中です。少し待ってから再度お試しください。");
-        return;
-      }
-
       const bounds = getGridBoundsFromCells(gridCells);
       if (!bounds) {
         setStatus("グリッドの範囲が取得できませんでした。");
@@ -1726,32 +1285,38 @@
 
       const waitForIdle = () =>
         new Promise((resolve) => map.once("idle", () => setTimeout(resolve, 120)));
-      const waitForRender = () =>
-        new Promise((resolve) =>
-          map.once("render", () => requestAnimationFrame(() => resolve()))
-        );
 
       const paddingPx = 60; // add breathing room around grid edges
       map.fitBounds(bounds, { padding: paddingPx, duration: 0 });
       await waitForIdle();
-      await waitForRender();
-      await new Promise((resolve) => setTimeout(resolve, 180)); // give tiles a moment to draw
 
       try {
         const canvas = map.getCanvas();
-        if (!canvas || canvas.width === 0 || canvas.height === 0) {
-          setStatus("インデックスのキャプチャに失敗しました（キャンバスが空です）。");
-          return;
-        }
         const dataURL = canvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        const ts = new Date().toISOString().replace(/[:.]/g, "-");
-        link.href = dataURL;
-        link.download = `grid_index_${ts}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setStatus("インデックス画像をダウンロードしました（グリッド表示あり）。");
+        const win = window.open("", "_blank");
+        if (win) {
+          const printHtml =
+            "<!doctype html>" +
+            "<html>" +
+            "<head><title>Grid Index</title></head>" +
+            '<body style="margin:24px; display:flex; justify-content:center; align-items:center; background:#f3f4f6;">' +
+            '<img src="' + dataURL + '" style="max-width:100%; height:auto; border:1px solid #d1d5db; padding:8px; background:#fff;" />' +
+            "</body>" +
+            "</html>";
+          win.document.write(printHtml);
+          win.document.close();
+          win.focus();
+          win.print();
+        } else {
+          // Fallback: download PNG if popup blocked
+          const link = document.createElement("a");
+          link.href = dataURL;
+          link.download = "grid_index.png";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+        setStatus("インデックスページを印刷/保存用に開きました。");
       } catch (e) {
         console.error(e);
         setStatus("インデックス出力に失敗しました。");
@@ -2111,6 +1676,4 @@
 
       updateUrlFromState();
     });
-  </script>
-</body>
-</html>
+  
